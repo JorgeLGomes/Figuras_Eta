@@ -33,6 +33,7 @@ from typing import Optional
 
 try:
     import rasterio
+    import rasterio.shutil as rio_shutil
     from rasterio.transform import from_origin
     from rasterio.crs import CRS
     from rasterio.enums import Resampling
@@ -99,31 +100,34 @@ def _prepare_array(data: np.ndarray, var_name: str) -> np.ndarray:
 # ESCRITOR COG
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _write_cog(arr: np.ndarray, fpath: str, metadata: Optional[dict] = None) -> str:
+def write_cog(arr: np.ndarray, fpath: str, metadata: Optional[dict] = None) -> str:
     """
-    Escreve um array (NY, NX) float32 como COG GeoTIFF.
+    Escreve arr (NY, NX) float32 como Cloud Optimized GeoTIFF.
 
-    Estrategia:
-      1. Escreve GeoTIFF temporario com tiles e compressao
-      2. Adiciona overviews (piramides)
-      3. Copia para arquivo final com COPY_SRC_OVERVIEWS=YES (formato COG)
+    Estrategia correta (3 passos):
+      1. Escreve GeoTIFF temporario com tiles + compressao
+      2. Constroi overviews no temporario (build_overviews)
+      3. Copia para arquivo final via rasterio.shutil.copy com
+         copy_src_overviews=True  <-- unico modo correto de gerar COG
+
+    NOTA: nao usar rasterio.open(..., COPY_SRC_OVERVIEWS=YES) + dst.write()
+    simultaneamente — isso corrompe os valores dos pixels.
 
     Parameters
     ----------
-    arr      : array (NY, NX) ja preparado (_prepare_array)
-    fpath    : caminho de saida do .tif
-    metadata : dict de tags GDAL a incluir nos metadados do arquivo
-
-    Returns
-    -------
-    Caminho do arquivo COG criado.
+    arr      : array (NY, NX) float32, preparado por _prepare_array
+    fpath    : caminho do arquivo .tif de saida
+    metadata : tags GDAL a gravar nos metadados
     """
     if not HAS_RASTERIO:
-        raise ImportError("rasterio e necessario para exportar COG GeoTIFF.")
+        raise ImportError("rasterio e necessario.")
 
     os.makedirs(os.path.dirname(os.path.abspath(fpath)), exist_ok=True)
 
-    profile_tmp = {
+    # Garante array nativo C-contiguous float32
+    arr = np.ascontiguousarray(arr, dtype=np.float32)
+
+    profile = {
         "driver"    : "GTiff",
         "dtype"     : "float32",
         "width"     : config.NX,
@@ -141,48 +145,40 @@ def _write_cog(arr: np.ndarray, fpath: str, metadata: Optional[dict] = None) -> 
         "BIGTIFF"   : "IF_SAFER",
     }
 
-    # Escrita em arquivo temporario
     with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as tmp:
         tmp_path = tmp.name
 
     try:
-        # 1. Escreve GeoTIFF temporario
-        # dst.write(array_2d, band_index) — arr deve ser (NY, NX)
-        with rasterio.open(tmp_path, "w", **profile_tmp) as dst:
+        # 1. Escreve GeoTIFF temporario com dados corretos
+        with rasterio.open(tmp_path, "w", **profile) as dst:
             dst.write(arr, 1)
             if metadata:
                 dst.update_tags(**metadata)
 
-        # 2. Constroi overviews (piramides)
+        # 2. Constroi overviews (piramides) no temporario
         with rasterio.open(tmp_path, "r+") as dst:
             dst.build_overviews(OVERVIEW_LEVELS, Resampling.average)
             dst.update_tags(ns="rio_overview", resampling="average")
 
-        # 3. Copia para COG final com overviews embutidos
-        profile_cog = profile_tmp.copy()
-        profile_cog["COPY_SRC_OVERVIEWS"] = "YES"
-
-        with rasterio.open(tmp_path, "r") as src:
-            with rasterio.open(fpath, "w", **profile_cog) as dst:
-                dst.write(src.read(1), 1)   # src.read(1) retorna (NY, NX)
-                if metadata:
-                    dst.update_tags(**metadata)
+        # 3. Copia para COG final: rasterio.shutil.copy com copy_src_overviews=True
+        #    Este e o unico metodo correto — preserva dados E overviews
+        rio_shutil.copy(
+            tmp_path,
+            fpath,
+            copy_src_overviews=True,
+            compress=COMPRESS,
+            predictor=PREDICTOR,
+            tiled=True,
+            blockxsize=TILE_SIZE,
+            blockysize=TILE_SIZE,
+            driver="GTiff",
+        )
 
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
     return fpath
-
-
-def write_cog(arr: np.ndarray, fpath: str, metadata: Optional[dict] = None) -> str:
-    """
-    Escreve arr (NY, NX) float32 como COG GeoTIFF.
-    Usa GeoTIFF + overviews manuais (compativel com todas as versoes do rasterio/GDAL).
-    """
-    if not HAS_RASTERIO:
-        raise ImportError("rasterio e necessario.")
-    return _write_cog(arr, fpath, metadata)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
