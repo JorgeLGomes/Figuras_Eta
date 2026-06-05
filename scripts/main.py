@@ -201,6 +201,11 @@ def parse_args():
         help=f"Diretorio de saida dos COGs (padrao: {config.COG_DIR})"
     )
     parser.add_argument(
+        "--cog_overviews", action="store_true",
+        help="Embutir overviews (piramides) nos COGs — pode causar multiplas "
+             "camadas em alguns visualizadores (ex: SisMOM). Padrao: desativado."
+    )
+    parser.add_argument(
         "--cog_only", action="store_true",
         help="Exportar SOMENTE COGs, sem gerar figuras PNG"
     )
@@ -282,6 +287,8 @@ def main():
             print("       pip install rasterio")
             sys.exit(1)
 
+        ovr = getattr(args, "cog_overviews", False)
+
         if not args.only_accum:
             if verbose:
                 print("\n[main] Exportando COG GeoTIFF -- campos por timestep...")
@@ -292,6 +299,7 @@ def main():
                 sequential    = args.sequential,
                 workers       = args.workers,
                 verbose       = verbose,
+                overviews     = ovr,
             )
 
         if not args.only_fields:
@@ -302,6 +310,7 @@ def main():
                 cog_base_dir = args.cog_dir,
                 sequential   = args.sequential,
                 verbose      = verbose,
+                overviews    = ovr,
             )
 
 

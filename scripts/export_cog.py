@@ -100,31 +100,32 @@ def _prepare_array(data: np.ndarray, var_name: str) -> np.ndarray:
 # ESCRITOR COG
 # ──────────────────────────────────────────────────────────────────────────────
 
-def write_cog(arr: np.ndarray, fpath: str, metadata: Optional[dict] = None) -> str:
+def write_cog(
+    arr: np.ndarray,
+    fpath: str,
+    metadata: Optional[dict] = None,
+    overviews: bool = False,
+) -> str:
     """
-    Escreve arr (NY, NX) float32 como Cloud Optimized GeoTIFF.
-
-    Estrategia correta (3 passos):
-      1. Escreve GeoTIFF temporario com tiles + compressao
-      2. Constroi overviews no temporario (build_overviews)
-      3. Copia para arquivo final via rasterio.shutil.copy com
-         copy_src_overviews=True  <-- unico modo correto de gerar COG
-
-    NOTA: nao usar rasterio.open(..., COPY_SRC_OVERVIEWS=YES) + dst.write()
-    simultaneamente — isso corrompe os valores dos pixels.
+    Escreve arr (NY, NX) float32 como GeoTIFF tiled georeferenciado.
 
     Parameters
     ----------
-    arr      : array (NY, NX) float32, preparado por _prepare_array
-    fpath    : caminho do arquivo .tif de saida
-    metadata : tags GDAL a gravar nos metadados
+    arr       : array (NY, NX) float32, preparado por _prepare_array
+    fpath     : caminho do arquivo .tif de saida
+    metadata  : tags GDAL a gravar nos metadados
+    overviews : se True, embute overviews (piramides) no arquivo via
+                rasterio.shutil.copy.
+                ATENCAO: alguns visualizadores (ex: SisMOM) exibem cada
+                nivel de overview como uma camada separada. Use False
+                (padrao) para compatibilidade maxima.
     """
     if not HAS_RASTERIO:
         raise ImportError("rasterio e necessario.")
 
     os.makedirs(os.path.dirname(os.path.abspath(fpath)), exist_ok=True)
 
-    # Garante array nativo C-contiguous float32
+    # Garante array nativo C-contiguous float32 (evita problemas de byte order)
     arr = np.ascontiguousarray(arr, dtype=np.float32)
 
     profile = {
@@ -145,26 +146,33 @@ def write_cog(arr: np.ndarray, fpath: str, metadata: Optional[dict] = None) -> s
         "BIGTIFF"   : "IF_SAFER",
     }
 
+    if not overviews:
+        # GeoTIFF tiled simples — sem overviews embutidos
+        # Compativel com todos os visualizadores, incluindo SisMOM
+        with rasterio.open(fpath, "w", **profile) as dst:
+            dst.write(arr, 1)
+            if metadata:
+                dst.update_tags(**metadata)
+        return fpath
+
+    # Com overviews: usa arquivo temporario + rasterio.shutil.copy
+    # NOTA: nao usar rasterio.open+COPY_SRC_OVERVIEWS+dst.write() juntos
+    #       — isso corrompe os valores dos pixels.
     with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as tmp:
         tmp_path = tmp.name
 
     try:
-        # 1. Escreve GeoTIFF temporario com dados corretos
         with rasterio.open(tmp_path, "w", **profile) as dst:
             dst.write(arr, 1)
             if metadata:
                 dst.update_tags(**metadata)
 
-        # 2. Constroi overviews (piramides) no temporario
         with rasterio.open(tmp_path, "r+") as dst:
             dst.build_overviews(OVERVIEW_LEVELS, Resampling.average)
             dst.update_tags(ns="rio_overview", resampling="average")
 
-        # 3. Copia para COG final: rasterio.shutil.copy com copy_src_overviews=True
-        #    Este e o unico metodo correto — preserva dados E overviews
         rio_shutil.copy(
-            tmp_path,
-            fpath,
+            tmp_path, fpath,
             copy_src_overviews=True,
             compress=COMPRESS,
             predictor=PREDICTOR,
@@ -173,7 +181,6 @@ def write_cog(arr: np.ndarray, fpath: str, metadata: Optional[dict] = None) -> s
             blockysize=TILE_SIZE,
             driver="GTiff",
         )
-
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
@@ -191,6 +198,7 @@ def export_field_as_cog(
     timestamp: datetime,
     cog_dir: str,
     title_extra: str = "",
+    overviews: bool = False,
 ) -> str:
     """
     Exporta um campo 2D como COG GeoTIFF.
@@ -229,7 +237,7 @@ def export_field_as_cog(
     fname = f"{var_name}_{timestamp.strftime('%Y%m%d%H')}{extra_tag}.tif"
     fpath = os.path.join(cog_dir, fname)
 
-    return write_cog(arr, fpath, metadata=meta)
+    return write_cog(arr, fpath, metadata=meta, overviews=overviews)
 
 
 def export_var_all_timesteps(
@@ -274,6 +282,7 @@ def export_24h_accumulation_as_cog(
     t_end: datetime,
     cog_dir: str,
     sequential: bool = False,
+    overviews: bool = False,
 ) -> str:
     """
     Calcula o acumulado 24h e exporta como COG GeoTIFF.
@@ -286,7 +295,8 @@ def export_24h_accumulation_as_cog(
     t_start = t_end - timedelta(hours=24)
     title_extra = f"acum24h_{t_start.strftime('%Y%m%d%H')}_{t_end.strftime('%Y%m%d%H')}"
 
-    return export_field_as_cog(arr_m, var_name, t_end, cog_dir, title_extra=title_extra)
+    return export_field_as_cog(arr_m, var_name, t_end, cog_dir,
+                               title_extra=title_extra, overviews=overviews)
 
 
 def export_all_24h_accumulations_as_cog(
@@ -294,6 +304,7 @@ def export_all_24h_accumulations_as_cog(
     cog_base_dir: str,
     sequential: bool = False,
     verbose: bool = True,
+    overviews: bool = False,
 ) -> dict:
     """
     Exporta acumulados 24h de PREC, PRCV e PRGE como COG GeoTIFF
@@ -315,7 +326,7 @@ def export_all_24h_accumulations_as_cog(
         while t_end <= t_max:
             try:
                 fpath = export_24h_accumulation_as_cog(
-                    data_dir, var, t_end, out_dir, sequential
+                    data_dir, var, t_end, out_dir, sequential, overviews=overviews
                 )
                 saved[var].append(fpath)
                 if verbose:
@@ -342,6 +353,7 @@ def export_all_fields_as_cog(
     sequential: bool = False,
     workers: int = 1,
     verbose: bool = True,
+    overviews: bool = False,
 ) -> dict:
     """
     Exporta todos os campos de todas as variaveis como COG GeoTIFF.
@@ -375,10 +387,10 @@ def export_all_fields_as_cog(
         )
 
     def _worker_cog(args):
-        _data_dir, _var, _t, _out_dir, _seq = args
+        _data_dir, _var, _t, _out_dir, _seq, _ovr = args
         try:
             data  = reader.read_field(_data_dir, _t, _var, sequential=_seq)
-            fpath = export_field_as_cog(data, _var, _t, _out_dir)
+            fpath = export_field_as_cog(data, _var, _t, _out_dir, overviews=_ovr)
             return (_var, _t, fpath, None)
         except Exception as e:
             return (_var, _t, None, str(e))
@@ -387,7 +399,7 @@ def export_all_fields_as_cog(
     for var in vars_to_export:
         out_dir = os.path.join(cog_base_dir, var)
         for t in timestamps:
-            tasks.append((data_dir, var, t, out_dir, sequential))
+            tasks.append((data_dir, var, t, out_dir, sequential, overviews))
 
     saved  = {v: [] for v in vars_to_export}
     n_ok   = 0
