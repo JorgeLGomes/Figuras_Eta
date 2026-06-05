@@ -89,6 +89,32 @@ if [[ -z "$PYTHON_CMD" ]]; then
 fi
 log_info "$($PYTHON_CMD --version)"
 
+# ── Instalar dependencias automaticamente ────────────────────────────────────
+REQ_FILE="$SCRIPTS_DIR/requirements.txt"
+if [[ -f "$REQ_FILE" ]]; then
+    # Verifica se as dependencias obrigatorias estao instaladas
+    MISSING=0
+    for pkg in numpy rasterio; do
+        if ! "$PYTHON_CMD" -c "import $pkg" 2>/dev/null; then
+            MISSING=1
+            break
+        fi
+    done
+    # Se --cog-only nao foi passado, verifica matplotlib tambem
+    if [[ "$COG_ONLY" -eq 0 ]]; then
+        if ! "$PYTHON_CMD" -c "import matplotlib" 2>/dev/null; then
+            MISSING=1
+        fi
+    fi
+
+    if [[ "$MISSING" -eq 1 ]]; then
+        log_info "Instalando dependencias de $REQ_FILE ..."
+        "$PYTHON_CMD" -m pip install -r "$REQ_FILE" --quiet \
+            || { log_error "Falha ao instalar dependencias. Verifique: $REQ_FILE"; exit 1; }
+        log_info "Dependencias instaladas."
+    fi
+fi
+
 # ── Montar argumentos para main.py ───────────────────────────────────────────
 PY_ARGS=()
 [[ -n "$DATA_BASE"  ]] && PY_ARGS+=("--data_base"  "$DATA_BASE")

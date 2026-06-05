@@ -25,9 +25,17 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import config
 import reader
-import plot_variables as pv
 import accumulate
 import export_cog
+
+# plot_variables / plot_utils (matplotlib) so sao importados quando necessario
+# Evita erro de ModuleNotFoundError em modo --cog-only sem matplotlib instalado
+pv = None
+def _load_plot_modules():
+    global pv
+    if pv is None:
+        import plot_variables as _pv
+        pv = _pv
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -38,6 +46,7 @@ def _worker(args):
     """Função auxiliar para execução paralela."""
     data_dir, var_name, timestamp, out_dir, sequential = args
     try:
+        _load_plot_modules()
         data  = reader.read_field(data_dir, timestamp, var_name, sequential=sequential)
         fpath = pv.plot_variable(var_name, data, timestamp, out_dir)
         return (var_name, timestamp, fpath, None)
@@ -281,6 +290,7 @@ def main():
 
     # ── Figuras PNG ───────────────────────────────────────────────────────────
     if generate_png:
+        _load_plot_modules()
         if not args.only_accum:
             generate_all_fields(
                 data_dir     = data_dir,

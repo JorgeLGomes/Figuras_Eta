@@ -1,8 +1,11 @@
+# Dependencias obrigatorias
 numpy>=1.24
-matplotlib>=3.7
 rasterio>=1.3
 
-# cartopy e opcional mas recomendado para mapas com linhas de costa
-# pip install cartopy
-# conda install -c conda-forge cartopy
-cartopy>=0.22
+# Dependencias para geracao de figuras PNG (nao necessarias para --cog-only)
+matplotlib>=3.7
+
+# cartopy: mapas com linhas de costa (opcional, mas recomendado)
+# Instale via conda se pip falhar:
+#   conda install -c conda-forge cartopy
+# cartopy>=0.22
