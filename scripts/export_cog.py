@@ -26,10 +26,12 @@ Valores:
 """
 
 import os
+import time
 import tempfile
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Optional
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 try:
     import rasterio
@@ -346,23 +348,45 @@ def export_all_24h_accumulations_as_cog(
 # EXPORTACAO COMPLETA (todas as variaveis, todos os timesteps)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _worker_cog(args):
+def _worker_cog_timestep(args):
     """
-    Worker COG de nivel de modulo (necessario para pickle no multiprocessing).
-    Lê TODOS os campos do timestep de uma vez e exporta a variavel solicitada.
+    Worker por TIMESTEP: le o arquivo .bin UMA vez e gera TODOS os COGs
+    das variaveis solicitadas. Paralelismo correto = 1 task por arquivo.
+
+    args: (data_dir, timestamp, vars_list, cog_dir, sequential, overviews, skip_existing)
+    returns: list of (var, timestamp, fpath_or_None, error_or_None)
     """
-    _data_dir, _var, _t, _out_dir, _seq, _ovr, _skip = args
-    fname = f"{_var}_{_t.strftime('%Y%m%d%H')}.tif"
-    fpath = os.path.join(_out_dir, fname)
-    if _skip and os.path.exists(fpath):
-        return (_var, _t, fpath, None)
+    _data_dir, _t, _vars, _out_dir, _seq, _ovr, _skip = args
+    results   = []
+    ts_str    = _t.strftime('%Y%m%d%H')
+
+    # Identifica quais variaveis precisam ser geradas
+    vars_needed = []
+    for var in _vars:
+        fpath = os.path.join(_out_dir, f"{var}_{ts_str}.tif")
+        if _skip and os.path.exists(fpath):
+            results.append((var, _t, fpath, None))
+        else:
+            vars_needed.append(var)
+
+    if not vars_needed:
+        return results
+
+    # Leitura unica do arquivo para todas as variaveis
     try:
         fields = reader.read_all_fields(_data_dir, _t, sequential=_seq)
-        data   = fields[_var]
-        fpath  = export_field_as_cog(data, _var, _t, _out_dir, overviews=_ovr)
-        return (_var, _t, fpath, None)
     except Exception as e:
-        return (_var, _t, None, str(e))
+        return results + [(v, _t, None, f"leitura: {e}") for v in vars_needed]
+
+    # Gera COG de cada variavel a partir dos dados ja lidos
+    for var in vars_needed:
+        try:
+            fpath = export_field_as_cog(fields[var], var, _t, _out_dir, overviews=_ovr)
+            results.append((var, _t, fpath, None))
+        except Exception as e:
+            results.append((var, _t, None, str(e)))
+
+    return results
 
 
 def export_all_fields_as_cog(
@@ -392,8 +416,6 @@ def export_all_fields_as_cog(
     -------
     dict {var_name: [lista de caminhos]}
     """
-    from concurrent.futures import ProcessPoolExecutor, as_completed
-
     vars_to_export = vars_to_export or config.VAR_NAMES
     timestamps     = reader.list_available_timestamps(data_dir)
 
@@ -409,44 +431,58 @@ def export_all_fields_as_cog(
 
     # Estrutura flat: todos os .tif direto em cog_base_dir (ex: cog/2026060400/)
     os.makedirs(cog_base_dir, exist_ok=True)
-    tasks = []
-    for var in vars_to_export:
-        for t in timestamps:
-            tasks.append((data_dir, var, t, cog_base_dir, sequential, overviews, skip_existing))
 
-    saved  = {v: [] for v in vars_to_export}
-    n_ok   = 0
-    n_err  = 0
+    # 1 task por TIMESTEP (nao por variavel) — leitura unica do arquivo
+    tasks = [
+        (data_dir, t, vars_to_export, cog_base_dir, sequential, overviews, skip_existing)
+        for t in timestamps
+    ]
 
-    if workers > 1:
-        with ProcessPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(_worker_cog, task): task for task in tasks}
-            for fut in as_completed(futures):
-                var, t, fpath, err = fut.result()
-                if err:
-                    n_err += 1
-                    if verbose:
-                        print(f"  [ERRO] {var} {t.strftime('%Y%m%d%H')}: {err}")
-                else:
-                    n_ok += 1
-                    saved[var].append(fpath)
-                    if verbose:
-                        print(f"  [COG] {fpath}")
-    else:
-        for task in tasks:
-            var, t, fpath, err = _worker_cog(task)
+    saved   = {v: [] for v in vars_to_export}
+    n_ok    = 0
+    n_skip  = 0
+    n_err   = 0
+    done    = 0
+    t0      = time.time()
+
+    def _process(res_list):
+        nonlocal n_ok, n_skip, n_err, done
+        done += 1
+        pct = done / len(tasks) * 100
+        for var, ts, fpath, err in res_list:
             if err:
                 n_err += 1
                 if verbose:
-                    print(f"  [ERRO] {var} {t.strftime('%Y%m%d%H')}: {err}")
+                    print(f"  [ERRO] {var} {ts.strftime('%Y%m%d%H')}: {err}")
             else:
-                n_ok += 1
                 saved[var].append(fpath)
-                if verbose:
-                    print(f"  [COG] {fpath}")
+                n_ok += 1
+        if verbose:
+            elapsed = time.time() - t0
+            eta = (elapsed / done) * (len(tasks) - done) if done else 0
+            print(
+                f"  [{done:3d}/{len(tasks)}  {pct:5.1f}%]"
+                f"  ok={n_ok}  err={n_err}"
+                f"  {elapsed:.0f}s  ETA={eta:.0f}s",
+                flush=True,
+            )
 
+    if workers > 1:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            futs = {pool.submit(_worker_cog_timestep, task): task for task in tasks}
+            for fut in as_completed(futs):
+                _process(fut.result())
+    else:
+        for task in tasks:
+            _process(_worker_cog_timestep(task))
+
+    elapsed = time.time() - t0
+    speed   = n_ok / elapsed if elapsed > 0 else 0
     if verbose:
-        print(f"\n[export_cog] {n_ok} COGs gerados, {n_err} erros.")
+        print(
+            f"\n[export_cog] {n_ok} COGs gerados, {n_err} erros"
+            f" | {elapsed:.1f}s ({speed:.1f} COG/s)"
+        )
 
     return saved
 
