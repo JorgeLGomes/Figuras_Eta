@@ -118,6 +118,7 @@ PROJECT_ROOT = SCRIPTS_DIR.parent
 DATA_DIR    = str(PROJECT_ROOT / "data")
 OUTPUT_DIR  = str(PROJECT_ROOT / "figuras" / "campos")
 ACCUM_DIR   = str(PROJECT_ROOT / "figuras" / "acumulados_24h")
+COG_DIR     = str(PROJECT_ROOT / "cog")
 LOG_DIR     = str(PROJECT_ROOT / "logs")
 
 DPI         = 120

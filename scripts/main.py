@@ -1,21 +1,18 @@
 """
-main.py — Orquestrador principal de geração de figuras do modelo Eta
+main.py -- Orquestrador principal de geracao de figuras do modelo Eta
 
 Uso:
-    python main.py --data_dir /caminho/para/bins --output_dir figuras
+    python main.py --data_dir /caminho/para/bins
     python main.py --data_dir . --vars TP2M MAGV PREC --sequential
     python main.py --data_dir . --only_accum        # somente acumulados 24h
     python main.py --data_dir . --workers 4         # paralelo (multiprocessing)
+    python main.py --data_dir . --cog               # exportar COG GeoTIFF
+    python main.py --data_dir . --cog --only_accum  # somente acumulados 24h como COG
 
-Estrutura de saída:
-    figuras/
-    ├── PSLM/   PSLM_2026060400.png  ...
-    ├── TP2M/   TP2M_2026060400.png  ...
-    ├── PREC/
-    │   ├── PREC_2026060406.png  ...   (campos 6h)
-    │   └── acumulado_24h/
-    │       ├── PREC_2026060500_Acum._24h_[...].png  ...
-    ...
+Estrutura de saida:
+    figuras/campos/    -- PNG por variavel/timestep
+    figuras/acumulados_24h/ -- PNG acumulados
+    cog/               -- COG GeoTIFF (quando --cog ativado)
 """
 
 import os
@@ -30,6 +27,7 @@ import config
 import reader
 import plot_variables as pv
 import accumulate
+import export_cog
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -187,11 +185,24 @@ def parse_args():
     )
     parser.add_argument(
         "--workers", type=int, default=1,
-        help="Número de processos paralelos (padrão: 1)"
+        help="Numero de processos paralelos (padrao: 1)"
     )
     parser.add_argument(
         "--quiet", action="store_true",
-        help="Suprime saída de progresso"
+        help="Suprime saida de progresso"
+    )
+    # ── COG GeoTIFF ──────────────────────────────────────────────────────────
+    parser.add_argument(
+        "--cog", action="store_true",
+        help="Exportar campos como Cloud Optimized GeoTIFF (requer rasterio)"
+    )
+    parser.add_argument(
+        "--cog_dir", default=config.COG_DIR,
+        help=f"Diretorio de saida dos COGs (padrao: {config.COG_DIR})"
+    )
+    parser.add_argument(
+        "--cog_only", action="store_true",
+        help="Exportar SOMENTE COGs, sem gerar figuras PNG"
     )
     return parser.parse_args()
 
@@ -219,42 +230,79 @@ def main():
 
     log_file = _setup_logging(config.LOG_DIR, config.RUN_TAG)
 
+    generate_png = not args.cog_only
+    generate_cog = args.cog or args.cog_only
+
     if verbose:
         print("=" * 60)
-        print("  Geração de figuras — Modelo Eta / BESM")
+        print("  Geracao de figuras -- Modelo Eta / BESM")
         print(f"  Run    : {config.RUN_TAG}")
         print(f"  T0     : {config.T0.strftime('%d/%m/%Y %HZ')}")
         print(f"  Passos : {config.NTIMES}  ({config.DT_HOURS}h)")
         print(f"  Dados  : {os.path.abspath(args.data_dir)}")
-        print(f"  Campos : {os.path.abspath(args.output_dir)}")
-        print(f"  Acum.  : {os.path.abspath(args.accum_dir)}")
+        if generate_png:
+            print(f"  Campos : {os.path.abspath(args.output_dir)}")
+            print(f"  Acum.  : {os.path.abspath(args.accum_dir)}")
+        if generate_cog:
+            print(f"  COG    : {os.path.abspath(args.cog_dir)}")
         print(f"  Log    : {log_file}")
         print("=" * 60)
 
     if args.vars:
         invalid = [v for v in args.vars if v not in config.VAR_NAMES]
         if invalid:
-            print(f"[main] ERRO: variáveis inválidas: {invalid}")
-            print(f"[main] Disponíveis: {config.VAR_NAMES}")
+            print(f"[main] ERRO: variaveis invalidas: {invalid}")
+            print(f"[main] Disponiveis: {config.VAR_NAMES}")
             sys.exit(1)
 
-    if not args.only_accum:
-        generate_all_fields(
-            data_dir     = args.data_dir,
-            output_dir   = args.output_dir,
-            vars_to_plot = args.vars,
-            sequential   = args.sequential,
-            workers      = args.workers,
-            verbose      = verbose,
-        )
+    # ── Figuras PNG ───────────────────────────────────────────────────────────
+    if generate_png:
+        if not args.only_accum:
+            generate_all_fields(
+                data_dir     = args.data_dir,
+                output_dir   = args.output_dir,
+                vars_to_plot = args.vars,
+                sequential   = args.sequential,
+                workers      = args.workers,
+                verbose      = verbose,
+            )
 
-    if not args.only_fields:
-        generate_24h_accumulations(
-            data_dir   = args.data_dir,
-            output_dir = args.accum_dir,
-            sequential = args.sequential,
-            verbose    = verbose,
-        )
+        if not args.only_fields:
+            generate_24h_accumulations(
+                data_dir   = args.data_dir,
+                output_dir = args.accum_dir,
+                sequential = args.sequential,
+                verbose    = verbose,
+            )
+
+    # ── COG GeoTIFF ───────────────────────────────────────────────────────────
+    if generate_cog:
+        if not export_cog.HAS_RASTERIO:
+            print("[main] ERRO: rasterio nao instalado. Execute:")
+            print("       pip install rasterio")
+            sys.exit(1)
+
+        if not args.only_accum:
+            if verbose:
+                print("\n[main] Exportando COG GeoTIFF -- campos por timestep...")
+            export_cog.export_all_fields_as_cog(
+                data_dir      = args.data_dir,
+                cog_base_dir  = args.cog_dir,
+                vars_to_export= args.vars,
+                sequential    = args.sequential,
+                workers       = args.workers,
+                verbose       = verbose,
+            )
+
+        if not args.only_fields:
+            if verbose:
+                print("\n[main] Exportando COG GeoTIFF -- acumulados 24h...")
+            export_cog.export_all_24h_accumulations_as_cog(
+                data_dir     = args.data_dir,
+                cog_base_dir = args.cog_dir,
+                sequential   = args.sequential,
+                verbose      = verbose,
+            )
 
 
 if __name__ == "__main__":

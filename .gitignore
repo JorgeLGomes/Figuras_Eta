@@ -6,8 +6,14 @@ data/
 # ── Figuras geradas (saída, não versionada) ──
 figuras/
 
+# ── COG GeoTIFF gerados ──
+cog/
+
 # ── Logs de execução ──
 logs/
+
+# ── Script auxiliar de cópia ──
+mover_projeto.bat
 
 # ── Python ──
 __pycache__/
@@ -33,14 +39,3 @@ ENV/
 
 # ── IDEs ──
 .vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# ── macOS ──
-.DS_Store
-
-# ── Windows ──
-Thumbs.db
-desktop.ini
