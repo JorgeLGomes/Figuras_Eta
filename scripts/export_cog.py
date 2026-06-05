@@ -354,6 +354,7 @@ def export_all_fields_as_cog(
     workers: int = 1,
     verbose: bool = True,
     overviews: bool = False,
+    skip_existing: bool = False,
 ) -> dict:
     """
     Exporta todos os campos de todas as variaveis como COG GeoTIFF.
@@ -387,10 +388,16 @@ def export_all_fields_as_cog(
         )
 
     def _worker_cog(args):
-        _data_dir, _var, _t, _out_dir, _seq, _ovr = args
+        _data_dir, _var, _t, _out_dir, _seq, _ovr, _skip = args
+        fname = f"{_var}_{_t.strftime('%Y%m%d%H')}.tif"
+        fpath = os.path.join(_out_dir, fname)
+        if _skip and os.path.exists(fpath):
+            return (_var, _t, fpath, None)
         try:
-            data  = reader.read_field(_data_dir, _t, _var, sequential=_seq)
-            fpath = export_field_as_cog(data, _var, _t, _out_dir, overviews=_ovr)
+            # Leitura por timestep completo para maior eficiencia
+            fields = reader.read_all_fields(_data_dir, _t, sequential=_seq)
+            data   = fields[_var]
+            fpath  = export_field_as_cog(data, _var, _t, _out_dir, overviews=_ovr)
             return (_var, _t, fpath, None)
         except Exception as e:
             return (_var, _t, None, str(e))
@@ -400,7 +407,7 @@ def export_all_fields_as_cog(
     tasks = []
     for var in vars_to_export:
         for t in timestamps:
-            tasks.append((data_dir, var, t, cog_base_dir, sequential, overviews))
+            tasks.append((data_dir, var, t, cog_base_dir, sequential, overviews, skip_existing))
 
     saved  = {v: [] for v in vars_to_export}
     n_ok   = 0

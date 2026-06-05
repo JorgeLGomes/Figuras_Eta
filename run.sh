@@ -41,13 +41,14 @@ OUTPUT_DIR=""
 ACCUM_DIR=""
 COG_DIR=""
 VARS=""
-WORKERS=1
+WORKERS=$(nproc 2>/dev/null || echo 4)   # padrao: todos os CPUs
 ONLY_ACCUM=0
 ONLY_FIELDS=0
 SEQUENTIAL=0
 COG=0
 COG_ONLY=0
 COG_OVERVIEWS=0
+SKIP_EXISTING=0
 QUIET=0
 
 # ── Parse argumentos ──────────────────────────────────────────────────────────
@@ -69,8 +70,9 @@ while [[ $# -gt 0 ]]; do
         --sequential)  SEQUENTIAL=1;    shift ;;
         --cog)         COG=1;           shift ;;
         --cog-only)    COG_ONLY=1;      shift ;;
-        --cog-overviews) COG_OVERVIEWS=1; shift ;;
-        --quiet)       QUIET=1;         shift ;;
+        --cog-overviews)  COG_OVERVIEWS=1;  shift ;;
+        --skip-existing)  SKIP_EXISTING=1; shift ;;
+        --quiet)          QUIET=1;         shift ;;
         *) echo "Argumento desconhecido: $1"; exit 1 ;;
     esac
 done
@@ -130,6 +132,7 @@ PY_ARGS=()
 [[ "$COG"           -eq 1 ]] && PY_ARGS+=("--cog")
 [[ "$COG_ONLY"      -eq 1 ]] && PY_ARGS+=("--cog_only")
 [[ "$COG_OVERVIEWS" -eq 1 ]] && PY_ARGS+=("--cog_overviews")
+[[ "$SKIP_EXISTING" -eq 1 ]] && PY_ARGS+=("--skip_existing")
 [[ "$QUIET"         -eq 1 ]] && PY_ARGS+=("--quiet")
 
 # ── Log de execucao ───────────────────────────────────────────────────────────
