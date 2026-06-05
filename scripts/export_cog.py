@@ -146,33 +146,25 @@ def _write_cog(arr: np.ndarray, fpath: str, metadata: Optional[dict] = None) -> 
         tmp_path = tmp.name
 
     try:
+        # 1. Escreve GeoTIFF temporario
+        # dst.write(array_2d, band_index) — arr deve ser (NY, NX)
         with rasterio.open(tmp_path, "w", **profile_tmp) as dst:
-            dst.write(arr[np.newaxis, :, :], 1)   # banda 1
+            dst.write(arr, 1)
             if metadata:
                 dst.update_tags(**metadata)
 
-        # Adicionar overviews ao arquivo temporario
+        # 2. Constroi overviews (piramides)
         with rasterio.open(tmp_path, "r+") as dst:
             dst.build_overviews(OVERVIEW_LEVELS, Resampling.average)
             dst.update_tags(ns="rio_overview", resampling="average")
 
-        # Copiar para COG final com overviews embutidos
+        # 3. Copia para COG final com overviews embutidos
         profile_cog = profile_tmp.copy()
-        profile_cog.update({
-            "COPY_SRC_OVERVIEWS": "YES",
-        })
+        profile_cog["COPY_SRC_OVERVIEWS"] = "YES"
 
         with rasterio.open(tmp_path, "r") as src:
             with rasterio.open(fpath, "w", **profile_cog) as dst:
-                dst.write(src.read(1), 1)
-                # Copiar overviews
-                for i, ovr_level in enumerate(src.overviews(1)):
-                    ovr_data = src.read(1, out_shape=(
-                        1,
-                        src.height // ovr_level,
-                        src.width  // ovr_level,
-                    ), resampling=Resampling.average)
-                    dst.write(ovr_data, 1)
+                dst.write(src.read(1), 1)   # src.read(1) retorna (NY, NX)
                 if metadata:
                     dst.update_tags(**metadata)
 
@@ -183,54 +175,13 @@ def _write_cog(arr: np.ndarray, fpath: str, metadata: Optional[dict] = None) -> 
     return fpath
 
 
-def _write_cog_simple(arr: np.ndarray, fpath: str, metadata: Optional[dict] = None) -> str:
-    """
-    Versao simplificada: usa o driver COG nativo do GDAL (rasterio >= 1.4 / GDAL >= 3.1).
-    Mais rapido e confiavel quando disponivel.
-    """
-    if not HAS_RASTERIO:
-        raise ImportError("rasterio e necessario para exportar COG GeoTIFF.")
-
-    os.makedirs(os.path.dirname(os.path.abspath(fpath)), exist_ok=True)
-
-    profile = {
-        "driver"          : "COG",
-        "dtype"           : "float32",
-        "width"           : config.NX,
-        "height"          : config.NY,
-        "count"           : 1,
-        "crs"             : CRS_WGS84,
-        "transform"       : TRANSFORM,
-        "nodata"          : NODATA,
-        "compress"        : COMPRESS,
-        "overview_resampling": "AVERAGE",
-        "BIGTIFF"         : "IF_SAFER",
-    }
-
-    with rasterio.open(fpath, "w", **profile) as dst:
-        dst.write(arr[np.newaxis, :, :], 1)
-        if metadata:
-            dst.update_tags(**metadata)
-
-    return fpath
-
-
 def write_cog(arr: np.ndarray, fpath: str, metadata: Optional[dict] = None) -> str:
     """
-    Escolhe automaticamente entre o driver COG nativo e a abordagem manual com overviews.
+    Escreve arr (NY, NX) float32 como COG GeoTIFF.
+    Usa GeoTIFF + overviews manuais (compativel com todas as versoes do rasterio/GDAL).
     """
     if not HAS_RASTERIO:
         raise ImportError("rasterio e necessario.")
-
-    # Tenta driver COG nativo (GDAL >= 3.1)
-    if "COG" in rasterio.drivers.raster_driver_extensions().values() or \
-       "COG" in [d.upper() for d in rasterio.drivers.raster_driver_extensions()]:
-        try:
-            return _write_cog_simple(arr, fpath, metadata)
-        except Exception:
-            pass
-
-    # Fallback: GeoTIFF com overviews manuais
     return _write_cog(arr, fpath, metadata)
 
 

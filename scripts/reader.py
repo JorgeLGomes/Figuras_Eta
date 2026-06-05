@@ -79,8 +79,9 @@ def read_field(
     arr = np.frombuffer(raw, dtype=dtype).astype(np.float32)
     arr = arr.reshape((ny, nx))
 
-    # Substitui undef por NaN
-    arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
+    # Substitui undef por NaN (suprime warning de inf/nan na subtracao)
+    with np.errstate(invalid="ignore"):
+        arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
 
     return arr
 
