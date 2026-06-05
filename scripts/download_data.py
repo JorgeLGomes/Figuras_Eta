@@ -227,15 +227,7 @@ def download_run(
     n_err    = 0
     total_mb = 0.0
 
-    tasks = [(url, dest_dir / fname, logger) for url, fname in file_list]
-
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {
-            pool.submit(download_file, url, dest, logger): fname
-            for url, dest, logger in [(u, d, logger) for u, d in file_list
-                                       for _ in [None]]
-        }
-        # Reconstroi corretamente
         futures = {}
         for url, fname in file_list:
             dest = dest_dir / fname
