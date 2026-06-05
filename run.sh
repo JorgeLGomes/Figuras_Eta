@@ -2,16 +2,23 @@
 # run.sh — Executa a geracao de figuras do modelo Eta com logging automatico
 #
 # Uso:
-#   chmod +x run.sh
-#   ./run.sh                              # tudo: campos PNG + acumulados 24h
-#   ./run.sh --only-accum                 # so acumulados 24h
-#   ./run.sh --only-fields                # so campos horarios
-#   ./run.sh --vars "TP2M MAGV PREC"      # variaveis especificas
-#   ./run.sh --workers 8                  # paralelo com 8 processos
-#   ./run.sh --cog                        # exportar COG GeoTIFF
-#   ./run.sh --cog-only                   # somente COG (sem PNG)
-#   ./run.sh --sequential                 # arquivos com marcadores Fortran
-#   ./run.sh --data-dir /dados/eta        # diretorio de dados alternativo
+#   ./run.sh                                     # tudo: PNG + acumulados
+#   ./run.sh --cog-only                          # somente COG GeoTIFF
+#   ./run.sh --cog --workers 8                   # PNG + COG paralelo
+#
+# Configuracao do caminho dos dados (escolha uma das opcoes):
+#   # 1. Via variavel de ambiente (persistente):
+#   export SISMOM_DATA_BASE=/dados/sismom/SisMOM/sismom_forecast
+#   ./run.sh --cog-only
+#
+#   # 2. Via argumento --data-base:
+#   ./run.sh --cog-only --data-base /dados/sismom/SisMOM/sismom_forecast
+#   # -> usa automaticamente <base>/2026060400/regional/eta/2D/
+#
+#   # 3. Via --data-dir (caminho completo):
+#   ./run.sh --cog-only --data-dir /dados/sismom/SisMOM/sismom_forecast/2026060400/regional/eta/2D
+#
+# Saida COG: cog/{run}/VARNAME_TIMESTAMP.tif  (flat, sem subpasta por variavel)
 
 set -euo pipefail
 
@@ -28,7 +35,8 @@ log_ok()    { echo -e "${GREEN}[ OK ]  $*${NC}"; }
 log_error() { echo -e "${RED}[ERRO]  $*${NC}"; }
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
-DATA_DIR=""
+DATA_BASE=""    # base SisMOM: /dados/sismom/SisMOM/sismom_forecast
+DATA_DIR=""     # caminho direto (substitui DATA_BASE)
 OUTPUT_DIR=""
 ACCUM_DIR=""
 COG_DIR=""
@@ -39,11 +47,13 @@ ONLY_FIELDS=0
 SEQUENTIAL=0
 COG=0
 COG_ONLY=0
+COG_OVERVIEWS=0
 QUIET=0
 
 # ── Parse argumentos ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --data-base)   DATA_BASE="$2";  shift 2 ;;
         --data-dir)    DATA_DIR="$2";   shift 2 ;;
         --output-dir)  OUTPUT_DIR="$2"; shift 2 ;;
         --accum-dir)   ACCUM_DIR="$2";  shift 2 ;;
@@ -55,6 +65,7 @@ while [[ $# -gt 0 ]]; do
         --sequential)  SEQUENTIAL=1;    shift ;;
         --cog)         COG=1;           shift ;;
         --cog-only)    COG_ONLY=1;      shift ;;
+        --cog-overviews) COG_OVERVIEWS=1; shift ;;
         --quiet)       QUIET=1;         shift ;;
         *) echo "Argumento desconhecido: $1"; exit 1 ;;
     esac
@@ -76,18 +87,20 @@ log_info "$($PYTHON_CMD --version)"
 
 # ── Montar argumentos para main.py ───────────────────────────────────────────
 PY_ARGS=()
+[[ -n "$DATA_BASE"  ]] && PY_ARGS+=("--data_base"  "$DATA_BASE")
 [[ -n "$DATA_DIR"   ]] && PY_ARGS+=("--data_dir"   "$DATA_DIR")
 [[ -n "$OUTPUT_DIR" ]] && PY_ARGS+=("--output_dir" "$OUTPUT_DIR")
 [[ -n "$ACCUM_DIR"  ]] && PY_ARGS+=("--accum_dir"  "$ACCUM_DIR")
 [[ -n "$COG_DIR"    ]] && PY_ARGS+=("--cog_dir"    "$COG_DIR")
 [[ -n "$VARS"       ]] && PY_ARGS+=("--vars" $VARS)
-[[ "$WORKERS"   -gt 1 ]] && PY_ARGS+=("--workers"    "$WORKERS")
-[[ "$ONLY_ACCUM"  -eq 1 ]] && PY_ARGS+=("--only_accum")
-[[ "$ONLY_FIELDS" -eq 1 ]] && PY_ARGS+=("--only_fields")
+[[ "$WORKERS"       -gt 1 ]] && PY_ARGS+=("--workers"    "$WORKERS")
+[[ "$ONLY_ACCUM"    -eq 1 ]] && PY_ARGS+=("--only_accum")
+[[ "$ONLY_FIELDS"   -eq 1 ]] && PY_ARGS+=("--only_fields")
 [[ "$SEQUENTIAL"  -eq 1 ]] && PY_ARGS+=("--sequential")
-[[ "$COG"         -eq 1 ]] && PY_ARGS+=("--cog")
-[[ "$COG_ONLY"    -eq 1 ]] && PY_ARGS+=("--cog_only")
-[[ "$QUIET"       -eq 1 ]] && PY_ARGS+=("--quiet")
+[[ "$COG"           -eq 1 ]] && PY_ARGS+=("--cog")
+[[ "$COG_ONLY"      -eq 1 ]] && PY_ARGS+=("--cog_only")
+[[ "$COG_OVERVIEWS" -eq 1 ]] && PY_ARGS+=("--cog_overviews")
+[[ "$QUIET"         -eq 1 ]] && PY_ARGS+=("--quiet")
 
 # ── Log de execucao ───────────────────────────────────────────────────────────
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")

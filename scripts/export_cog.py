@@ -314,19 +314,19 @@ def export_all_24h_accumulations_as_cog(
     -------
     dict {var_name: [lista de caminhos]}
     """
+    # Estrutura flat: acumulados diretamente em cog_base_dir (ex: cog/2026060400/)
+    os.makedirs(cog_base_dir, exist_ok=True)
     saved = {}
     t_max = config.T0 + timedelta(hours=config.NTIMES - 1)
 
     for var in config.PRECIP_VARS:
-        out_dir = os.path.join(cog_base_dir, var, "acumulado_24h")
-        os.makedirs(out_dir, exist_ok=True)
         saved[var] = []
 
         t_end = config.T0 + timedelta(hours=24)
         while t_end <= t_max:
             try:
                 fpath = export_24h_accumulation_as_cog(
-                    data_dir, var, t_end, out_dir, sequential, overviews=overviews
+                    data_dir, var, t_end, cog_base_dir, sequential, overviews=overviews
                 )
                 saved[var].append(fpath)
                 if verbose:
@@ -395,11 +395,12 @@ def export_all_fields_as_cog(
         except Exception as e:
             return (_var, _t, None, str(e))
 
+    # Estrutura flat: todos os .tif direto em cog_base_dir (ex: cog/2026060400/)
+    os.makedirs(cog_base_dir, exist_ok=True)
     tasks = []
     for var in vars_to_export:
-        out_dir = os.path.join(cog_base_dir, var)
         for t in timestamps:
-            tasks.append((data_dir, var, t, out_dir, sequential, overviews))
+            tasks.append((data_dir, var, t, cog_base_dir, sequential, overviews))
 
     saved  = {v: [] for v in vars_to_export}
     n_ok   = 0

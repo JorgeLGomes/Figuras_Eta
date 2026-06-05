@@ -109,13 +109,43 @@ PRECIP_VARS = ["PREC", "PRCV", "PRGE"]
 # ──────────────────────────────────────────────
 # CAMINHOS DO PROJETO
 # ──────────────────────────────────────────────
-# scripts/ fica dentro de <PROJETO_ROOT>/scripts/
-# Os demais diretórios ficam em <PROJETO_ROOT>/
+import os
 import pathlib
+
 SCRIPTS_DIR  = pathlib.Path(__file__).parent.resolve()
 PROJECT_ROOT = SCRIPTS_DIR.parent
 
-DATA_DIR    = str(PROJECT_ROOT / "data")
+# ── Diretorio base dos dados do SisMOM no servidor ─────────────────────────
+# Padrao do servidor: /dados/sismom/SisMOM/sismom_forecast/{run}/regional/eta/2D/
+# Configuravel via variavel de ambiente SISMOM_DATA_BASE ou --data_base no CLI.
+# Se nao definido, usa o diretorio local data/ do projeto.
+_SISMOM_DATA_BASE_DEFAULT = "/dados/sismom/SisMOM/sismom_forecast"
+SISMOM_DATA_BASE = os.environ.get("SISMOM_DATA_BASE", "")
+
+def build_data_dir(run: str, base: str = "") -> str:
+    """
+    Constroi o caminho completo para os arquivos .bin de um run.
+
+    Prioridade:
+      1. Argumento `base` (CLI --data_base)
+      2. Variavel de ambiente SISMOM_DATA_BASE
+      3. Diretorio local data/ do projeto
+
+    Exemplos:
+      build_data_dir("2026060400", "/dados/sismom/SisMOM/sismom_forecast")
+      -> "/dados/sismom/SisMOM/sismom_forecast/2026060400/regional/eta/2D"
+
+      build_data_dir("2026060400")  # sem base -> local
+      -> "<PROJECT_ROOT>/data"
+    """
+    effective_base = base or SISMOM_DATA_BASE
+    if effective_base:
+        return os.path.join(effective_base, run, "regional", "eta", "2D")
+    return str(PROJECT_ROOT / "data")
+
+# Caminho de dados padrao (usa RUN_TAG definido na secao ARQUIVO acima)
+DATA_DIR    = build_data_dir(RUN_TAG)
+
 OUTPUT_DIR  = str(PROJECT_ROOT / "figuras" / "campos")
 ACCUM_DIR   = str(PROJECT_ROOT / "figuras" / "acumulados_24h")
 COG_DIR     = str(PROJECT_ROOT / "cog")

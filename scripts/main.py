@@ -156,8 +156,17 @@ def parse_args():
         description="Gera figuras do modelo Eta para todas as variáveis 2D."
     )
     parser.add_argument(
-        "--data_dir", default=config.DATA_DIR,
-        help=f"Diretório dos arquivos .bin (padrão: {config.DATA_DIR})"
+        "--data_base", default="",
+        help=(
+            "Diretorio base dos dados SisMOM no servidor. "
+            "Ex: /dados/sismom/SisMOM/sismom_forecast  "
+            "O caminho completo sera: <data_base>/<run>/regional/eta/2D. "
+            "Tambem configuravel via env SISMOM_DATA_BASE."
+        )
+    )
+    parser.add_argument(
+        "--data_dir", default="",
+        help="Caminho direto para os arquivos .bin (substitui --data_base)"
     )
     parser.add_argument(
         "--output_dir", default=config.OUTPUT_DIR,
@@ -233,6 +242,16 @@ def main():
     args    = parse_args()
     verbose = not args.quiet
 
+    # ── Resolver caminho dos dados ────────────────────────────────────────────
+    # Prioridade: --data_dir > --data_base > SISMOM_DATA_BASE env > local data/
+    if args.data_dir:
+        data_dir = args.data_dir
+    else:
+        data_dir = config.build_data_dir(config.RUN_TAG, base=args.data_base)
+
+    # ── COG: estrutura cog/{run}/ (flat, sem subpasta por variavel) ───────────
+    cog_run_dir = os.path.join(args.cog_dir, config.RUN_TAG)
+
     log_file = _setup_logging(config.LOG_DIR, config.RUN_TAG)
 
     generate_png = not args.cog_only
@@ -244,12 +263,12 @@ def main():
         print(f"  Run    : {config.RUN_TAG}")
         print(f"  T0     : {config.T0.strftime('%d/%m/%Y %HZ')}")
         print(f"  Passos : {config.NTIMES}  ({config.DT_HOURS}h)")
-        print(f"  Dados  : {os.path.abspath(args.data_dir)}")
+        print(f"  Dados  : {os.path.abspath(data_dir)}")
         if generate_png:
             print(f"  Campos : {os.path.abspath(args.output_dir)}")
             print(f"  Acum.  : {os.path.abspath(args.accum_dir)}")
         if generate_cog:
-            print(f"  COG    : {os.path.abspath(args.cog_dir)}")
+            print(f"  COG    : {os.path.abspath(cog_run_dir)}")
         print(f"  Log    : {log_file}")
         print("=" * 60)
 
@@ -264,7 +283,7 @@ def main():
     if generate_png:
         if not args.only_accum:
             generate_all_fields(
-                data_dir     = args.data_dir,
+                data_dir     = data_dir,
                 output_dir   = args.output_dir,
                 vars_to_plot = args.vars,
                 sequential   = args.sequential,
@@ -274,7 +293,7 @@ def main():
 
         if not args.only_fields:
             generate_24h_accumulations(
-                data_dir   = args.data_dir,
+                data_dir   = data_dir,
                 output_dir = args.accum_dir,
                 sequential = args.sequential,
                 verbose    = verbose,
@@ -293,8 +312,8 @@ def main():
             if verbose:
                 print("\n[main] Exportando COG GeoTIFF -- campos por timestep...")
             export_cog.export_all_fields_as_cog(
-                data_dir      = args.data_dir,
-                cog_base_dir  = args.cog_dir,
+                data_dir      = data_dir,
+                cog_base_dir  = cog_run_dir,
                 vars_to_export= args.vars,
                 sequential    = args.sequential,
                 workers       = args.workers,
@@ -306,8 +325,8 @@ def main():
             if verbose:
                 print("\n[main] Exportando COG GeoTIFF -- acumulados 24h...")
             export_cog.export_all_24h_accumulations_as_cog(
-                data_dir     = args.data_dir,
-                cog_base_dir = args.cog_dir,
+                data_dir     = data_dir,
+                cog_base_dir = cog_run_dir,
                 sequential   = args.sequential,
                 verbose      = verbose,
                 overviews    = ovr,
