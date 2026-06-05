@@ -346,6 +346,25 @@ def export_all_24h_accumulations_as_cog(
 # EXPORTACAO COMPLETA (todas as variaveis, todos os timesteps)
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _worker_cog(args):
+    """
+    Worker COG de nivel de modulo (necessario para pickle no multiprocessing).
+    Lê TODOS os campos do timestep de uma vez e exporta a variavel solicitada.
+    """
+    _data_dir, _var, _t, _out_dir, _seq, _ovr, _skip = args
+    fname = f"{_var}_{_t.strftime('%Y%m%d%H')}.tif"
+    fpath = os.path.join(_out_dir, fname)
+    if _skip and os.path.exists(fpath):
+        return (_var, _t, fpath, None)
+    try:
+        fields = reader.read_all_fields(_data_dir, _t, sequential=_seq)
+        data   = fields[_var]
+        fpath  = export_field_as_cog(data, _var, _t, _out_dir, overviews=_ovr)
+        return (_var, _t, fpath, None)
+    except Exception as e:
+        return (_var, _t, None, str(e))
+
+
 def export_all_fields_as_cog(
     data_dir: str,
     cog_base_dir: str,
@@ -367,6 +386,7 @@ def export_all_fields_as_cog(
     sequential    : True se arquivos .bin usam marcadores Fortran
     workers       : processos paralelos (1 = serial)
     verbose       : exibir progresso
+    skip_existing : pula arquivos ja existentes
 
     Returns
     -------
@@ -384,23 +404,8 @@ def export_all_fields_as_cog(
     if verbose:
         print(
             f"[export_cog] {len(timestamps)} timesteps x {len(vars_to_export)} variaveis"
-            f" = {len(timestamps) * len(vars_to_export)} COGs a gerar."
+            f" = {len(timestamps) * len(vars_to_export)} COGs a gerar | workers={workers}"
         )
-
-    def _worker_cog(args):
-        _data_dir, _var, _t, _out_dir, _seq, _ovr, _skip = args
-        fname = f"{_var}_{_t.strftime('%Y%m%d%H')}.tif"
-        fpath = os.path.join(_out_dir, fname)
-        if _skip and os.path.exists(fpath):
-            return (_var, _t, fpath, None)
-        try:
-            # Leitura por timestep completo para maior eficiencia
-            fields = reader.read_all_fields(_data_dir, _t, sequential=_seq)
-            data   = fields[_var]
-            fpath  = export_field_as_cog(data, _var, _t, _out_dir, overviews=_ovr)
-            return (_var, _t, fpath, None)
-        except Exception as e:
-            return (_var, _t, None, str(e))
 
     # Estrutura flat: todos os .tif direto em cog_base_dir (ex: cog/2026060400/)
     os.makedirs(cog_base_dir, exist_ok=True)
