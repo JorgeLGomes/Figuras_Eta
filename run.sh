@@ -53,13 +53,17 @@ QUIET=0
 # ── Parse argumentos ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --data-base)   DATA_BASE="$2";  shift 2 ;;
-        --data-dir)    DATA_DIR="$2";   shift 2 ;;
-        --output-dir)  OUTPUT_DIR="$2"; shift 2 ;;
-        --accum-dir)   ACCUM_DIR="$2";  shift 2 ;;
-        --cog-dir)     COG_DIR="$2";    shift 2 ;;
-        --vars)        VARS="$2";       shift 2 ;;
-        --workers)     WORKERS="$2";    shift 2 ;;
+        # Argumentos com valor obrigatorio: verifica se $2 existe
+        --data-base)
+            [[ $# -lt 2 || "${2:-}" == --* || -z "${2:-}" ]] \
+                && { log_info "--data-base sem valor: usando SISMOM_DATA_BASE do ambiente"; shift; } \
+                || { DATA_BASE="$2"; shift 2; } ;;
+        --data-dir)    DATA_DIR="${2:?'--data-dir requer um valor'}";   shift 2 ;;
+        --output-dir)  OUTPUT_DIR="${2:?'--output-dir requer um valor'}"; shift 2 ;;
+        --accum-dir)   ACCUM_DIR="${2:?'--accum-dir requer um valor'}";  shift 2 ;;
+        --cog-dir)     COG_DIR="${2:?'--cog-dir requer um valor'}";      shift 2 ;;
+        --vars)        VARS="${2:?'--vars requer um valor'}";            shift 2 ;;
+        --workers)     WORKERS="${2:?'--workers requer um valor'}";      shift 2 ;;
         --only-accum)  ONLY_ACCUM=1;    shift ;;
         --only-fields) ONLY_FIELDS=1;   shift ;;
         --sequential)  SEQUENTIAL=1;    shift ;;
