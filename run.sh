@@ -9,12 +9,18 @@
 #   ./run.sh --accum-hours 48                    # acumulado de 48h (sequencial)
 #   ./run.sh --accum-hours 24                    # acumulado de 24h: ACUM00Z + ACUM12Z (padrao)
 #
+# Rodada: passe --run com tag completo ou apenas a hora
+#   ./run.sh --run 2026060600          # tag completo YYYYMMDDHH
+#   ./run.sh --run 00                  # 00Z de hoje (data do sistema)
+#   ./run.sh --run 12                  # 12Z de hoje
+#   export RUN_TAG=2026060600          # ou via variavel de ambiente
+#
 # Configuracao via arquivos YAML (edite antes de rodar):
-#   config.yaml      — rodada, grade, caminhos, figura, acumulados
+#   config.yaml      — grade, modelo, caminhos, figura, acumulados
 #   variables.yaml   — variaveis, colormaps, limites (enabled: false para desativar)
 #
 #   Arquivos alternativos:
-#   ./run.sh --config /rodadas/run2/config.yaml --vars-file /rodadas/run2/vars.yaml
+#   ./run.sh --run 00 --config /rodadas/run2/config.yaml --vars-file /rodadas/run2/vars.yaml
 #
 # Configuracao do caminho dos dados (escolha uma das opcoes):
 #   # 1. Via variavel de ambiente (persistente):
@@ -45,6 +51,7 @@ log_ok()    { echo -e "${GREEN}[ OK ]  $*${NC}"; }
 log_error() { echo -e "${RED}[ERRO]  $*${NC}"; }
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
+RUN_ARG=""      # tag da rodada: YYYYMMDDHH ou HH
 CONFIG_FILE=""  # config.yaml alternativo
 VARS_FILE=""    # variables.yaml alternativo
 DATA_BASE=""    # base SisMOM: /dados/sismom/SisMOM/sismom_forecast
@@ -67,6 +74,7 @@ QUIET=0
 # ── Parse argumentos ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --run)       RUN_ARG="${2:?'--run requer um valor (ex: 2026060600 ou 00)'}"; shift 2 ;;
         --config)    CONFIG_FILE="${2:?'--config requer um valor'}";    shift 2 ;;
         --vars-file) VARS_FILE="${2:?'--vars-file requer um valor'}";   shift 2 ;;
         # Argumentos com valor obrigatorio: verifica se $2 existe
@@ -135,6 +143,7 @@ fi
 
 # ── Montar argumentos para main.py ───────────────────────────────────────────
 PY_ARGS=()
+[[ -n "$RUN_ARG"     ]] && PY_ARGS+=("--run"       "$RUN_ARG")
 [[ -n "$CONFIG_FILE" ]] && PY_ARGS+=("--config"    "$CONFIG_FILE")
 [[ -n "$VARS_FILE"   ]] && PY_ARGS+=("--vars-file" "$VARS_FILE")
 [[ -n "$DATA_BASE"  ]] && PY_ARGS+=("--data_base"  "$DATA_BASE")
@@ -154,4 +163,32 @@ PY_ARGS=()
 [[ "$SKIP_EXISTING" -eq 1 ]] && PY_ARGS+=("--skip_existing")
 [[ "$QUIET"         -eq 1 ]] && PY_ARGS+=("--quiet")
 
-# ── Log de execucao ─────────────────────────────────────────────────
+# ── Log de execucao ───────────────────────────────────────────────────────────
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+LOG_FILE="$LOG_DIR/run_${TIMESTAMP}.log"
+
+echo "----------------------------------------------------"
+log_info "Figuras_Eta - Inicio: $(date '+%d/%m/%Y %H:%M:%S')"
+log_info "Scripts : $SCRIPTS_DIR"
+log_info "Log     : $LOG_FILE"
+echo "----------------------------------------------------"
+
+# ── Executar ──────────────────────────────────────────────────────────────────
+START_TIME=$SECONDS
+
+"$PYTHON_CMD" "$SCRIPTS_DIR/main.py" "${PY_ARGS[@]}" 2>&1 | tee "$LOG_FILE"
+EXIT_CODE="${PIPESTATUS[0]}"
+
+ELAPSED=$(( SECONDS - START_TIME ))
+ELAPSED_FMT=$(printf "%02d:%02d:%02d" $((ELAPSED/3600)) $((ELAPSED%3600/60)) $((ELAPSED%60)))
+
+echo "----------------------------------------------------"
+if [[ "$EXIT_CODE" -eq 0 ]]; then
+    log_ok "Concluido em $ELAPSED_FMT"
+else
+    log_error "Falha (codigo $EXIT_CODE) apos $ELAPSED_FMT"
+    log_error "Verifique: $LOG_FILE"
+fi
+echo "----------------------------------------------------"
+
+exit "$EXIT_CODE"

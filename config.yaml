@@ -5,11 +5,13 @@
 # Os scripts leem este arquivo automaticamente ao iniciar.
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ── Identificacao da rodada ───────────────────────────────────────────────────
+# ── Parametros do modelo (fixos por configuracao) ─────────────────────────────
+# A data/hora da rodada e passada via --run no CLI (nao fica neste arquivo).
+#   --run 2026060600   -> rodada completa YYYYMMDDHH
+#   --run 00           -> 00Z de hoje (data do sistema)
+#   --run 12           -> 12Z de hoje
+# Fallback (se --run nao for passado): variavel de ambiente RUN_TAG
 run:
-  tag: "2026060400"          # YYYYMMDDHH — prefixo dos arquivos binarios
-  # t0 e opcional; se omitido, e derivado do tag acima (formato YYYYMMDDHH)
-  # t0: "2026-06-04T00:00:00"
   ntimes: 121                # numero de passos de tempo (inclui analise = 0)
   dt_hours: 1                # intervalo de saida do modelo em horas
 

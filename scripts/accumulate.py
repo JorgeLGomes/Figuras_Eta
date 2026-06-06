@@ -330,4 +330,87 @@ def plot_all_accumulations(
 
     # Limites de colorbar por variavel e periodo (mm)
     vmax_table = {
-        "PREC" : {6: 80,  12: 120, 24: 200
+        "PREC" : {6: 80,  12: 120, 24: 200, 48: 300, 72: 400},
+        "PRCV" : {6: 60,  12: 80,  24: 150, 48: 200, 72: 300},
+        "PRGE" : {6: 30,  12: 40,  24: 80,  48: 120, 72: 160},
+    }
+
+    for var in config.PRECIP_VARS:
+        vmax = vmax_table.get(var, {}).get(accum_hours, accum_hours * 8)
+
+        for win in windows:
+            arr = compute_accumulation(data_dir, var, win, sequential)
+            if arr is None:
+                continue
+
+            fname = accum_filename(var, win['validity'], accum_hours=accum_hours,
+                                   ext=config.FIG_EXT)
+            fpath = os.path.join(output_dir, fname)
+
+            title_extra = (
+                f"Acum. {accum_hours}h ({win['type']})  "
+                f"[FH {win['start_fh']:03d}-{win['end_fh']:03d}  "
+                f"val. {win['validity'].strftime('%d/%m %HZ')}]"
+            )
+            try:
+                pu.plot_field(
+                    arr, var, win['validity'], output_dir,
+                    title_extra=title_extra,
+                    convert_fn=pu.m_to_mm,
+                    units_override="mm",
+                    vmin_override=0,
+                    vmax_override=vmax,
+                )
+                # plot_field salva com nome automatico; renomeia para padrao
+                auto = os.path.join(
+                    output_dir,
+                    f"{var}_{win['validity'].strftime('%Y%m%d%H')}.{config.FIG_EXT}"
+                )
+                if os.path.exists(auto) and auto != fpath:
+                    os.rename(auto, fpath)
+
+                if os.path.exists(fpath):
+                    saved[var].append(fpath)
+                    if verbose:
+                        print(f"  [PNG accum] {fname}")
+            except Exception as e:
+                if verbose:
+                    print(f"  [ERRO PNG accum] {var} {win['type']}: {e}")
+
+    return saved
+
+
+# ── alias de compatibilidade ──────────────────────────────────────────────────
+def plot_all_24h_accumulations(
+    data_dir: str,
+    output_dir: str,
+    sequential: bool = False,
+    verbose: bool = True,
+) -> Dict[str, List[str]]:
+    """Alias de compatibilidade -- chama plot_all_accumulations(accum_hours=24)."""
+    return plot_all_accumulations(
+        data_dir=data_dir, output_dir=output_dir,
+        accum_hours=24, sequential=sequential, verbose=verbose,
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# COMPATIBILIDADE -- funcao legada
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compute_24h_accumulation(
+    data_dir: str,
+    var_name: str,
+    t_end: datetime,
+    sequential: bool = False,
+) -> np.ndarray:
+    """Legado: acumulado 24h terminando em t_end (4 x 6h). Mantido para compat."""
+    windows_4x6 = [t_end - timedelta(hours=h) for h in (18, 12, 6, 0)]
+    acc = None
+    for t in windows_4x6:
+        field = reader.read_field(data_dir, t, var_name, sequential=sequential)
+        if acc is None:
+            acc = np.zeros_like(field)
+        with np.errstate(invalid="ignore"):
+            acc = np.where(np.isnan(field) | np.isnan(acc), np.nan, acc + field)
+    return acc

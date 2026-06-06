@@ -29,20 +29,23 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 # config.py inicializa na importacao; para usar arquivos alternativos precisamos
 # chamar init_config() com os caminhos corretos logo no inicio.
 def _preparse_config_args():
-    """Extrai --config e --vars-file do argv sem processar os outros args."""
+    """
+    Extrai --config, --vars-file e --run do argv sem processar os outros args.
+    Necessario porque config.init_config() deve ser chamado antes de qualquer
+    uso das constantes do modulo (reader, export_cog etc. las em importacao).
+    """
     import argparse as _ap
     p = _ap.ArgumentParser(add_help=False)
-    p.add_argument("--config",     default=None)
-    p.add_argument("--vars_file",  default=None)
-    p.add_argument("--vars-file",  dest="vars_file", default=None)
+    p.add_argument("--config",    default=None)
+    p.add_argument("--vars-file", "--vars_file", dest="vars_file", default=None)
+    p.add_argument("--run",       default=None)
     known, _ = p.parse_known_args()
-    return known.config, known.vars_file
+    return known.config, known.vars_file, known.run
 
-_cfg_file, _vars_file_pre = _preparse_config_args()
+_cfg_file, _vars_file_pre, _run_pre = _preparse_config_args()
 
-import config as config   # noqa: E402  (importa antes de reinicializar)
-if _cfg_file or _vars_file_pre:
-    config.init_config(_cfg_file, _vars_file_pre)
+import config as config   # noqa: E402
+config.init_config(_cfg_file, _vars_file_pre, run_tag=_run_pre)
 
 import reader
 import accumulate
@@ -249,6 +252,15 @@ def parse_args():
         description="Gera figuras do modelo Eta para todas as variaveis 2D.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    # ── Rodada ────────────────────────────────────────────────────────────────
+    parser.add_argument(
+        "--run", default=None,
+        help=(
+            "Tag da rodada: YYYYMMDDHH ou HH (usa data do sistema para a data). "
+            "Ex: --run 2026060600  ou  --run 00  (00Z de hoje)  ou  --run 12. "
+            "Fallback: variavel de ambiente RUN_TAG."
+        )
+    )
     # ── Arquivos de configuracao ──────────────────────────────────────────────
     parser.add_argument(
         "--config", default=None,
@@ -409,4 +421,73 @@ def main():
 
     # Variaveis a processar: CLI > enabled no YAML > todas
     vars_to_use = args.vars or config.enabled_vars()
-    invali
+    invalid = [v for v in vars_to_use if v not in config.VAR_NAMES]
+    if invalid:
+        print(f"[main] ERRO: variaveis invalidas: {invalid}")
+        print(f"[main] Disponiveis: {config.VAR_NAMES}")
+        sys.exit(1)
+    if verbose:
+        print(f"[main] Variaveis: {len(vars_to_use)} — {vars_to_use}")
+
+    # ── Figuras PNG ───────────────────────────────────────────────────────────
+    if generate_png:
+        _load_plot_modules()
+        if not args.only_accum:
+            generate_all_fields(
+                data_dir       = data_dir,
+                output_dir     = args.output_dir,
+                vars_to_plot   = vars_to_use,
+                sequential     = args.sequential,
+                workers        = args.workers,
+                verbose        = verbose,
+                skip_existing  = args.skip_existing,
+            )
+
+        if not args.only_fields:
+            generate_accumulations(
+                data_dir    = data_dir,
+                output_dir  = args.accum_dir,
+                accum_hours = args.accum_hours,
+                sequential  = args.sequential,
+                verbose     = verbose,
+            )
+
+    # ── COG GeoTIFF ───────────────────────────────────────────────────────────
+    if generate_cog:
+        if not export_cog.HAS_RASTERIO:
+            print("[main] ERRO: rasterio nao instalado. Execute:")
+            print("       pip install rasterio")
+            sys.exit(1)
+
+        ovr = getattr(args, "cog_overviews", False)
+
+        if not args.only_accum:
+            if verbose:
+                print("\n[main] Exportando COG GeoTIFF -- campos por timestep...")
+            export_cog.export_all_fields_as_cog(
+                data_dir       = data_dir,
+                cog_base_dir   = cog_run_dir,
+                vars_to_export = vars_to_use,
+                sequential     = args.sequential,
+                workers        = args.workers,
+                verbose        = verbose,
+                overviews      = ovr,
+                skip_existing  = args.skip_existing,
+            )
+
+        if not args.only_fields:
+            if verbose:
+                print(f"\n[main] Exportando COG GeoTIFF -- acumulados {args.accum_hours}h...")
+            accumulate.export_all_accumulations_as_cog(
+                data_dir      = data_dir,
+                cog_dir       = cog_run_dir,
+                accum_hours   = args.accum_hours,
+                sequential    = args.sequential,
+                overviews     = ovr,
+                skip_existing = args.skip_existing,
+                verbose       = verbose,
+            )
+
+
+if __name__ == "__main__":
+    main()
