@@ -39,3 +39,14 @@ ENV/
 
 # ── IDEs ──
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── macOS ──
+.DS_Store
+
+# ── Windows ──
+Thumbs.db
+desktop.ini

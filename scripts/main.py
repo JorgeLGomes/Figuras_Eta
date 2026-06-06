@@ -404,12 +404,13 @@ def main():
         if not args.only_fields:
             if verbose:
                 print("\n[main] Exportando COG GeoTIFF -- acumulados 24h...")
-            export_cog.export_all_24h_accumulations_as_cog(
-                data_dir     = data_dir,
-                cog_base_dir = cog_run_dir,
-                sequential   = args.sequential,
-                verbose      = verbose,
-                overviews    = ovr,
+            accumulate.export_all_accumulations_as_cog(
+                data_dir      = data_dir,
+                cog_dir       = cog_run_dir,
+                sequential    = args.sequential,
+                overviews     = ovr,
+                skip_existing = args.skip_existing,
+                verbose       = verbose,
             )
 
 

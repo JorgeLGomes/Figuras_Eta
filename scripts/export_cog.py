@@ -276,30 +276,9 @@ def export_var_all_timesteps(
 
 # ──────────────────────────────────────────────────────────────────────────────
 # EXPORTACAO DE ACUMULADOS 24H
+# Use accumulate.export_all_accumulations_as_cog() -- API atual
+# Nomenclatura: PREC_ACUM24h_2026060500.tif  (validade no nome)
 # ──────────────────────────────────────────────────────────────────────────────
-
-def export_24h_accumulation_as_cog(
-    data_dir: str,
-    var_name: str,
-    t_end: datetime,
-    cog_dir: str,
-    sequential: bool = False,
-    overviews: bool = False,
-) -> str:
-    """
-    Calcula o acumulado 24h e exporta como COG GeoTIFF.
-
-    Returns
-    -------
-    Caminho do arquivo .tif criado.
-    """
-    arr_m = accumulate.compute_24h_accumulation(data_dir, var_name, t_end, sequential)
-    t_start = t_end - timedelta(hours=24)
-    title_extra = f"acum24h_{t_start.strftime('%Y%m%d%H')}_{t_end.strftime('%Y%m%d%H')}"
-
-    return export_field_as_cog(arr_m, var_name, t_end, cog_dir,
-                               title_extra=title_extra, overviews=overviews)
-
 
 def export_all_24h_accumulations_as_cog(
     data_dir: str,
@@ -307,41 +286,22 @@ def export_all_24h_accumulations_as_cog(
     sequential: bool = False,
     verbose: bool = True,
     overviews: bool = False,
+    skip_existing: bool = False,
 ) -> dict:
     """
-    Exporta acumulados 24h de PREC, PRCV e PRGE como COG GeoTIFF
-    para todos os periodos disponiveis no forecast.
+    Wrapper de compatibilidade -- delega para accumulate.export_all_accumulations_as_cog().
 
-    Returns
-    -------
-    dict {var_name: [lista de caminhos]}
+    Nomenclatura atual: PREC_ACUM24h_2026060500.tif
+    Janelas ACUM00Z e ACUM12Z calculadas a partir do horario do run (config.T0).
     """
-    # Estrutura flat: acumulados diretamente em cog_base_dir (ex: cog/2026060400/)
-    os.makedirs(cog_base_dir, exist_ok=True)
-    saved = {}
-    t_max = config.T0 + timedelta(hours=config.NTIMES - 1)
-
-    for var in config.PRECIP_VARS:
-        saved[var] = []
-
-        t_end = config.T0 + timedelta(hours=24)
-        while t_end <= t_max:
-            try:
-                fpath = export_24h_accumulation_as_cog(
-                    data_dir, var, t_end, cog_base_dir, sequential, overviews=overviews
-                )
-                saved[var].append(fpath)
-                if verbose:
-                    print(f"  [COG acum24h] {var} {t_end.strftime('%Y%m%d%H')} -> {fpath}")
-            except FileNotFoundError as e:
-                if verbose:
-                    print(f"  [COG acum24h] AVISO arquivo ausente: {e}")
-            except Exception as e:
-                if verbose:
-                    print(f"  [COG acum24h] ERRO {var} {t_end}: {e}")
-            t_end += timedelta(hours=24)
-
-    return saved
+    return accumulate.export_all_accumulations_as_cog(
+        data_dir      = data_dir,
+        cog_dir       = cog_base_dir,
+        sequential    = sequential,
+        overviews     = overviews,
+        skip_existing = skip_existing,
+        verbose       = verbose,
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

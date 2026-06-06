@@ -1,39 +1,304 @@
 """
-accumulate.py — Acumulado de 24h para PREC, PRCV e PRGE
+accumulate.py -- Acumulados de precipitacao de 24h para PREC, PRCV e PRGE
 
-As variáveis de precipitação no CTL representam acumulados de 6h cada.
-Para obter o acumulado de 24h, somam-se os 4 campos correspondentes
-ao período de 24h desejado.
+Logica de acumulo:
+------------------
+O modelo tem saida HORARIA. A precipitacao NAO e definida na analise (hora 0),
+portanto o acumulo NUNCA inclui o timestep 0.
 
-Lógica de seleção dos timesteps para acumulado de 24h
-------------------------------------------------------
-O CTL tem TDEF 121 LINEAR 00Z04Jun2026 1hr.
-Como PREC/PRCV/PRGE são "6h precip", o campo em um dado timestep T
-representa a precipitação acumulada entre T-6h e T.
-Portanto os timesteps relevantes são: T=6h, 12h, 18h, 24h, 30h, ...
-(índices 0-based: 5, 11, 17, 23, ..., ou seja i % 6 == 5)
+Duas janelas de acumulo sao geradas:
 
-Para cada janela de 24h terminando em T_end (múltiplo de 24h após T0):
-  soma = campo(T_end-18h) + campo(T_end-12h) + campo(T_end-6h) + campo(T_end)
+  ACUM00Z: acumula de 00Z a 00Z (validade em horario 00Z)
+  ACUM12Z: acumula de 12Z a 12Z (validade em horario 12Z)
 
-Exemplo: acumulado 24h de 00Z04Jun a 00Z05Jun
-  T_end = 00Z05Jun (índice 24)
-  Soma dos índices 6, 12, 18, 24 (1-based) = índices 5, 11, 17, 23 (0-based)
+Para run iniciando em 00Z (ex: 2026060400):
+  ACUM00Z: soma FH 1-24  -> validade 2026060500 (00Z dia seguinte)
+           soma FH 25-48 -> validade 2026060600
+           ...
+  ACUM12Z: soma FH 13-36 -> validade 2026060512 (12Z dia seguinte)
+           soma FH 37-60 -> validade 2026060612
+           ...
+           FH 109-132 seria o 5o ciclo, mas so ha FH ate 120
+           -> janela incompleta -> DESCARTADO
+
+Para run iniciando em 12Z (ex: 2026060412):
+  ACUM12Z: soma FH 1-24  -> validade 2026060512 (12Z dia seguinte)
+  ACUM00Z: soma FH 13-36 -> validade 2026060600 (00Z dois dias depois)
+           ...
+           FH 1-12 do ciclo ACUM00Z nao estao disponiveis
+           -> primeiro ciclo ACUM00Z descartado
+
+Nomenclatura dos arquivos:
+  PREC_ACUM24h_2026060500.tif   -- validade 2026-06-05 00Z
+  PREC_ACUM24h_2026060512.tif   -- validade 2026-06-05 12Z
 """
 
 import os
+import glob
 import numpy as np
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Dict, Tuple, Optional
 
 import config
 import reader
-import plot_utils as pu
-import plot_variables as pv
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# NÚCLEO DO ACUMULADO
+# JANELAS DE ACUMULO
+# ──────────────────────────────────────────────────────────────────────────────
+
+def get_accumulation_windows(
+    t0: datetime = None,
+    ntimes: int = None,
+    dt_hours: int = None,
+) -> List[Dict]:
+    """
+    Determina todas as janelas de acumulo de 24h validas para o run.
+
+    Regras:
+      Run 00Z -> ACUM00Z comeca no FH dt_hours (1h)
+              -> ACUM12Z comeca no FH 12+dt_hours (13h)
+      Run 12Z -> ACUM12Z comeca no FH dt_hours (1h)
+              -> ACUM00Z comeca no FH 12+dt_hours (13h)
+      Janelas com menos de 24h disponiveis sao descartadas.
+
+    Returns
+    -------
+    Lista de dicts ordenada por (validade, tipo):
+      {
+        'type'    : 'ACUM00Z' | 'ACUM12Z',
+        'start_fh': int  -- primeiro FH de previsao incluido (em horas)
+        'end_fh'  : int  -- ultimo FH incluido (em horas)
+        'validity': datetime
+        'n_steps' : int  -- numero de arquivos somados (= 24 / dt_hours)
+      }
+    """
+    t0       = t0       if t0       is not None else config.T0
+    ntimes   = ntimes   if ntimes   is not None else config.NTIMES
+    dt_hours = dt_hours if dt_hours is not None else config.DT_HOURS
+
+    run_hour = t0.hour
+    max_fh   = (ntimes - 1) * dt_hours   # ultimo FH disponivel (em horas)
+    n_steps  = 24 // dt_hours             # passos por janela de 24h
+
+    # Define qual ciclo comeca no FH 1 e qual comeca no FH 13
+    if run_hour == 0:
+        cycle_starts = [('ACUM00Z', dt_hours),
+                        ('ACUM12Z', 12 + dt_hours)]
+    elif run_hour == 12:
+        cycle_starts = [('ACUM12Z', dt_hours),
+                        ('ACUM00Z', 12 + dt_hours)]
+    else:
+        # Horario nao-padrao: inferir pelos horarios de validade
+        cycle_starts = [('ACUM00Z', dt_hours),
+                        ('ACUM12Z', 12 + dt_hours)]
+
+    windows = []
+    for accum_type, start_fh in cycle_starts:
+        fh = start_fh
+        while fh + (n_steps - 1) * dt_hours <= max_fh:
+            end_fh   = fh + (n_steps - 1) * dt_hours
+            validity = t0 + timedelta(hours=end_fh)
+            windows.append({
+                'type'    : accum_type,
+                'start_fh': fh,
+                'end_fh'  : end_fh,
+                'validity': validity,
+                'n_steps' : n_steps,
+            })
+            fh += 24
+
+    windows.sort(key=lambda w: (w['validity'], w['type']))
+    return windows
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CALCULO DO ACUMULADO
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compute_accumulation(
+    data_dir: str,
+    var_name: str,
+    window: Dict,
+    sequential: bool = False,
+) -> Optional[np.ndarray]:
+    """
+    Soma os campos de precipitacao dos FH dentro de uma janela de 24h.
+
+    Returns
+    -------
+    np.ndarray (NY, NX) em metros (unidade original), ou None se algum
+    arquivo estiver ausente (janela incompleta -> descartada).
+    """
+    t0  = config.T0
+    dt  = config.DT_HOURS
+    acc = None
+
+    for step in range(window['n_steps']):
+        fh = window['start_fh'] + step * dt
+        t  = t0 + timedelta(hours=fh)
+        try:
+            field = reader.read_field(data_dir, t, var_name, sequential=sequential)
+        except FileNotFoundError:
+            return None
+
+        if acc is None:
+            acc = np.zeros_like(field, dtype=np.float32)
+        with np.errstate(invalid="ignore"):
+            acc = np.where(np.isnan(field) | np.isnan(acc), np.nan, acc + field)
+
+    return acc
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# NOMENCLATURA
+# ──────────────────────────────────────────────────────────────────────────────
+
+def accum_filename(var_name: str, validity: datetime, ext: str = "tif") -> str:
+    """
+    Gera o nome do arquivo de acumulado.
+    Exemplo: PREC_ACUM24h_2026060500.tif
+    """
+    return f"{var_name}_ACUM24h_{validity.strftime('%Y%m%d%H')}.{ext}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# EXPORTACAO COG
+# ──────────────────────────────────────────────────────────────────────────────
+
+def export_all_accumulations_as_cog(
+    data_dir: str,
+    cog_dir: str,
+    sequential: bool = False,
+    overviews: bool = False,
+    skip_existing: bool = False,
+    verbose: bool = True,
+) -> Dict[str, List[str]]:
+    """
+    Calcula e exporta todos os acumulados de 24h de PREC, PRCV e PRGE
+    como COG GeoTIFF com a nomenclatura VARNAME_ACUM24h_YYYYMMDDHH.tif.
+    """
+    import export_cog as ecog
+
+    os.makedirs(cog_dir, exist_ok=True)
+    windows = get_accumulation_windows()
+    saved   = {v: [] for v in config.PRECIP_VARS}
+
+    if verbose:
+        print(f"[accum] {len(windows)} janelas x {len(config.PRECIP_VARS)} variaveis"
+              f" = {len(windows) * len(config.PRECIP_VARS)} acumulados")
+        for w in windows:
+            print(f"  {w['type']:8s}  FH {w['start_fh']:3d}-{w['end_fh']:3d}"
+                  f"  val. {w['validity'].strftime('%Y%m%d %HZ')}")
+
+    for var in config.PRECIP_VARS:
+        for win in windows:
+            fname = accum_filename(var, win['validity'])
+            fpath = os.path.join(cog_dir, fname)
+
+            if skip_existing and os.path.exists(fpath):
+                if verbose:
+                    print(f"  SKIP  {fname}")
+                saved[var].append(fpath)
+                continue
+
+            arr = compute_accumulation(data_dir, var, win, sequential)
+            if arr is None:
+                if verbose:
+                    print(f"  [AVISO] {var} {win['type']} FH{win['start_fh']}-"
+                          f"{win['end_fh']}: arquivo ausente -> descartado")
+                continue
+
+            try:
+                # Escreve diretamente no caminho correto
+                ecog.write_cog(
+                    ecog._prepare_array(arr * 1000.0, var),   # m -> mm, flip
+                    fpath,
+                    metadata={
+                        "variable"   : var,
+                        "description": config.VAR_DESC.get(var, var),
+                        "units"      : "mm",
+                        "accum_type" : win['type'],
+                        "start_fh"   : str(win['start_fh']),
+                        "end_fh"     : str(win['end_fh']),
+                        "validity"   : win['validity'].strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "model"      : f"Eta03/BESM run {config.RUN_TAG}",
+                        "nodata"     : str(ecog.NODATA),
+                    },
+                    overviews=overviews,
+                )
+                saved[var].append(fpath)
+                if verbose:
+                    print(f"  OK  {fname}")
+            except Exception as e:
+                if verbose:
+                    print(f"  [ERRO] {var} {win['type']}: {e}")
+
+    return saved
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# EXPORTACAO PNG (compatibilidade com main.py)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def plot_all_24h_accumulations(
+    data_dir: str,
+    output_dir: str,
+    sequential: bool = False,
+    verbose: bool = True,
+) -> Dict[str, List[str]]:
+    """Gera figuras PNG dos acumulados de 24h."""
+    import plot_utils as pu
+
+    os.makedirs(output_dir, exist_ok=True)
+    windows = get_accumulation_windows()
+    saved   = {v: [] for v in config.PRECIP_VARS}
+
+    for var in config.PRECIP_VARS:
+        for win in windows:
+            arr = compute_accumulation(data_dir, var, win, sequential)
+            if arr is None:
+                continue
+
+            fname = accum_filename(var, win['validity'], ext=config.FIG_EXT)
+            fpath = os.path.join(output_dir, fname)
+
+            title_extra = (
+                f"Acum. 24h {win['type']}  "
+                f"[FH {win['start_fh']:03d}-{win['end_fh']:03d}  "
+                f"val. {win['validity'].strftime('%d/%m %HZ')}]"
+            )
+            try:
+                pu.plot_field(
+                    arr, var, win['validity'], output_dir,
+                    title_extra=title_extra,
+                    convert_fn=pu.m_to_mm,
+                    units_override="mm",
+                    vmin_override=0,
+                    vmax_override={"PREC": 200, "PRCV": 150, "PRGE": 80}.get(var, 200),
+                )
+                # plot_field salva com nome diferente; renomeia para padrao
+                auto = os.path.join(
+                    output_dir,
+                    f"{var}_{win['validity'].strftime('%Y%m%d%H')}_"
+                    f"acum._24h_{win['type'].lower()}.{config.FIG_EXT}"
+                )
+                if os.path.exists(auto) and auto != fpath:
+                    os.rename(auto, fpath)
+
+                if os.path.exists(fpath):
+                    saved[var].append(fpath)
+                    if verbose:
+                        print(f"  [PNG accum] {fname}")
+            except Exception as e:
+                if verbose:
+                    print(f"  [ERRO PNG accum] {var} {win['type']}: {e}")
+
+    return saved
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# COMPATIBILIDADE -- funcoes legadas usadas por export_cog.py antigo
 # ──────────────────────────────────────────────────────────────────────────────
 
 def compute_24h_accumulation(
@@ -43,183 +308,17 @@ def compute_24h_accumulation(
     sequential: bool = False,
 ) -> np.ndarray:
     """
-    Calcula o acumulado de 24h de uma variável de precipitação.
-
-    Parameters
-    ----------
-    data_dir  : diretório com os arquivos .bin
-    var_name  : "PREC", "PRCV" ou "PRGE"
-    t_end     : datetime do final do período de 24h (deve ser múltiplo de 6h)
-    sequential: passar True se os arquivos têm marcadores Fortran
-
-    Returns
-    -------
-    np.ndarray (NY, NX) em metros (unidade original do CTL)
-    NaN onde algum dos 4 campos é NaN ou indisponível.
-
-    Raises
-    ------
-    ValueError  : se t_end não for múltiplo de 6h
-    FileNotFoundError : se algum dos 4 arquivos não existir
+    Legado: calcula acumulado 24h terminando em t_end.
+    Usado por export_cog.export_24h_accumulation_as_cog().
+    Soma os 4 campos de 6h anteriores a t_end.
     """
-    if var_name not in config.PRECIP_VARS:
-        raise ValueError(
-            f"'{var_name}' não é variável de precipitação. "
-            f"Use uma de: {config.PRECIP_VARS}"
-        )
-
-    # t_end deve ser múltiplo de 6h a partir de T0
-    delta_h = int((t_end - config.T0).total_seconds() / 3600)
-    if delta_h % 6 != 0:
-        raise ValueError(
-            f"t_end={t_end} não é múltiplo de 6h a partir de T0={config.T0}. "
-            f"delta_h={delta_h}"
-        )
-
-    # Os 4 timesteps que compõem as 24h
-    windows = [t_end - timedelta(hours=h) for h in (18, 12, 6, 0)]
-
-    accumulation = None
-    for t in windows:
+    from datetime import timedelta
+    windows_4x6 = [t_end - timedelta(hours=h) for h in (18, 12, 6, 0)]
+    acc = None
+    for t in windows_4x6:
         field = reader.read_field(data_dir, t, var_name, sequential=sequential)
-        if accumulation is None:
-            accumulation = np.zeros_like(field)
-        # NaN propagante: onde qualquer campo é NaN, o acumulado é NaN
+        if acc is None:
+            acc = np.zeros_like(field)
         with np.errstate(invalid="ignore"):
-            accumulation = np.where(
-                np.isnan(field) | np.isnan(accumulation),
-                np.nan,
-                accumulation + field,
-            )
-
-    return accumulation
-
-
-def compute_all_24h_windows(
-    data_dir: str,
-    var_name: str,
-    sequential: bool = False,
-) -> List[tuple]:
-    """
-    Calcula os acumulados de 24h para TODOS os períodos disponíveis
-    dentro da janela do forecast (NTIMES = 121h).
-
-    Retorna lista de (t_end, np.ndarray) para cada janela completa de 24h.
-    Período mínimo necessário: 24h (t_end >= T0 + 24h, i.e., t_end >= índice 24).
-    Janelas disponíveis (t_end múltiplo de 24h): +24h, +48h, +72h, +96h, +120h
-    """
-    results = []
-    # t_end máximo: T0 + (NTIMES-1) horas
-    t_max = config.T0 + timedelta(hours=config.NTIMES - 1)
-
-    t_end = config.T0 + timedelta(hours=24)
-    while t_end <= t_max:
-        try:
-            arr = compute_24h_accumulation(data_dir, var_name, t_end, sequential)
-            results.append((t_end, arr))
-        except FileNotFoundError as e:
-            print(f"[accumulate] Arquivo ausente para {t_end}: {e}")
-        t_end += timedelta(hours=24)
-
-    return results
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# PLOT DO ACUMULADO
-# ──────────────────────────────────────────────────────────────────────────────
-
-# Limites do colormap para acumulado 24h (valores maiores que o 6h)
-_ACUM24_VMAX = {
-    "PREC": 200,
-    "PRCV": 150,
-    "PRGE":  80,
-}
-
-
-def plot_24h_accumulation(
-    data_dir: str,
-    var_name: str,
-    t_end: datetime,
-    output_dir: str,
-    sequential: bool = False,
-) -> str:
-    """
-    Calcula e plota o acumulado de 24h para uma variável de precipitação.
-
-    Parameters
-    ----------
-    data_dir   : diretório com os arquivos .bin
-    var_name   : "PREC", "PRCV" ou "PRGE"
-    t_end      : datetime do final do período (múltiplo de 6h)
-    output_dir : diretório de saída das figuras
-    sequential : True se arquivos têm marcadores Fortran
-
-    Returns
-    -------
-    Caminho da figura salva.
-    """
-    arr_m = compute_24h_accumulation(data_dir, var_name, t_end, sequential)
-
-    t_start  = t_end - timedelta(hours=24)
-    title_ex = (
-        f"Acum. 24h  "
-        f"[{t_start.strftime('%d/%m %HZ')} → {t_end.strftime('%d/%m %HZ')}]"
-    )
-
-    # Gera a figura usando a função da variável com override de limites e conversão
-    fpath = pu.plot_field(
-        arr_m,
-        var_name,
-        t_end,
-        output_dir,
-        title_extra=title_ex,
-        convert_fn=pu.m_to_mm,
-        units_override="mm",
-        vmin_override=0,
-        vmax_override=_ACUM24_VMAX.get(var_name, 200),
-    )
-    return fpath
-
-
-def plot_all_24h_accumulations(
-    data_dir: str,
-    output_base_dir: str,
-    sequential: bool = False,
-) -> dict:
-    """
-    Gera figuras de acumulado 24h para PREC, PRCV e PRGE
-    em todos os períodos disponíveis no forecast.
-
-    Parameters
-    ----------
-    data_dir       : diretório com os .bin
-    output_base_dir: diretório raiz de saída (subpastas por variável serão criadas)
-    sequential     : True se arquivos têm marcadores Fortran
-
-    Returns
-    -------
-    dict {var_name: [lista de caminhos de figuras geradas]}
-    """
-    saved = {}
-    for var in config.PRECIP_VARS:
-        out_dir = os.path.join(output_base_dir, var, "acumulado_24h")
-        os.makedirs(out_dir, exist_ok=True)
-        saved[var] = []
-
-        t_max  = config.T0 + timedelta(hours=config.NTIMES - 1)
-        t_end  = config.T0 + timedelta(hours=24)
-
-        while t_end <= t_max:
-            try:
-                fpath = plot_24h_accumulation(
-                    data_dir, var, t_end, out_dir, sequential
-                )
-                saved[var].append(fpath)
-                print(f"[acumulado 24h] {var} {t_end.strftime('%Y%m%d%H')} → {fpath}")
-            except FileNotFoundError as e:
-                print(f"[acumulado 24h] AVISO — arquivo ausente: {e}")
-            except Exception as e:
-                print(f"[acumulado 24h] ERRO em {var} {t_end}: {e}")
-            t_end += timedelta(hours=24)
-
-    return saved
+            acc = np.where(np.isnan(field) | np.isnan(acc), np.nan, acc + field)
+    return acc
