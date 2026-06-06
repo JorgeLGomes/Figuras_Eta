@@ -41,62 +41,31 @@ def _precip_cmap():
     return mcolors.LinearSegmentedColormap.from_list("precip", colors)
 
 
-# Mapeamento: var_name -> (cmap, vmin, vmax)
-# vmin/vmax = None → escala automática (percentis)
-CMAP_CONFIG = {
-    "PSLM" : ("RdBu_r"    , 990  , 1030 ),
-    "PSLC" : ("RdBu_r"    , 980  , 1030 ),
-    "TP2M" : ("RdBu_r"    , 268  , 308  ),
-    "MXTP" : ("hot_r"     , 270  , 313  ),
-    "MNTP" : ("cool"      , 260  , 305  ),
-    "DP2M" : ("BrBG"      , 260  , 300  ),
-    "US2M" : ("YlGnBu"    , 0    , 100  ),
-    "UR2M" : ("YlGnBu"    , 0    , 1    ),
-    "U10M" : ("bwr"       , -20  , 20   ),
-    "V10M" : ("bwr"       , -20  , 20   ),
-    "MAGV" : ("YlOrRd"    , 0    , 20   ),
-    "U100" : ("bwr"       , -25  , 25   ),
-    "V100" : ("bwr"       , -25  , 25   ),
-    "PREC" : (_precip_cmap(), 0  , 50   ),
-    "PRCV" : (_precip_cmap(), 0  , 40   ),
-    "PRGE" : (_precip_cmap(), 0  , 20   ),
-    "NEVE" : ("Blues"     , 0    , 20   ),
-    "CLSF" : ("RdBu"      , -200 , 600  ),
-    "CSSF" : ("RdBu"      , -50  , 300  ),
-    "GHFL" : ("coolwarm"  , -50  , 50   ),
-    "TSFC" : ("RdBu_r"    , 268  , 320  ),
-    "TSOIL": ("RdBu_r"    , 270  , 315  ),
-    "USOIL": ("YlGnBu"    , 0    , 1    ),
-    "SMAV" : ("YlGnBu"    , 0    , 1    ),
-    "RNOF" : ("Blues"     , 0    , None ),
-    "RNSG" : ("Blues"     , 0    , None ),
-    "USST" : ("bwr"       , -0.5 , 0.5  ),
-    "VSST" : ("bwr"       , -0.5 , 0.5  ),
-    "LWNV" : ("Greys"     , 0    , 1    ),
-    "MDNV" : ("Greys"     , 0    , 1    ),
-    "HINV" : ("Greys"     , 0    , 1    ),
-    "CLD"  : ("Greys"     , 0    , 1    ),
-    "OCIS" : ("YlOrRd"    , 0    , 900  ),
-    "OLIS" : ("inferno"   , 200  , 450  ),
-    "OCES" : ("YlOrRd"    , 0    , 200  ),
-    "OLES" : ("inferno"   , 200  , 450  ),
-    "ROCE" : ("YlOrRd"    , 0    , 500  ),
-    "ROLE" : ("inferno"   , 150  , 300  ),
-    "ALBE" : ("YlGn"      , 0    , 0.8  ),
-    "CAPE" : ("hot_r"     , 0    , 3000 ),
-    "AGPL" : ("YlGnBu"    , 0    , 60   ),
-    "QUINT": ("bwr"       , -300 , 300  ),
-    "QVINT": ("bwr"       , -300 , 300  ),
-    "CWINT": ("Blues"     , 0    , 0.5  ),
-    "CIINT": ("Purples"   , 0    , 0.3  ),
-    "HPBL" : ("YlOrRd"    , 0    , 3000 ),
+# Colormap especial "precip" referenciado no variables.yaml
+_PRECIP_CMAP = _precip_cmap()
+
+# Nomes reservados de colormaps proprios (mapeados de string para objeto)
+_CUSTOM_CMAPS = {
+    "precip": _PRECIP_CMAP,
 }
 
 
+def _resolve_cmap(cmap_name):
+    """Converte string de colormap (incluindo nomes proprios) para objeto matplotlib."""
+    if isinstance(cmap_name, str):
+        return _CUSTOM_CMAPS.get(cmap_name, cmap_name)
+    return cmap_name   # ja e um objeto colormap
+
+
 def get_cmap_config(var_name: str):
-    """Retorna (cmap, vmin, vmax) para a variável."""
-    cfg = CMAP_CONFIG.get(var_name, ("viridis", None, None))
-    return cfg
+    """
+    Retorna (cmap, vmin, vmax) para a variavel a partir de config.CMAP_CONFIG
+    (carregado de variables.yaml).
+
+    O cmap retornado pode ser string ou objeto matplotlib colormap.
+    """
+    raw_cmap, vmin, vmax = config.CMAP_CONFIG.get(var_name, ("viridis", None, None))
+    return _resolve_cmap(raw_cmap), vmin, vmax
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -242,3 +211,4 @@ def plot_field(
 def m_to_mm(arr: np.ndarray) -> np.ndarray:
     """Converte metros → milímetros (para variáveis de precipitação)."""
     return arr * 1000.0
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               

@@ -5,6 +5,16 @@
 #   ./run.sh                                     # tudo: PNG + acumulados
 #   ./run.sh --cog-only                          # somente COG GeoTIFF
 #   ./run.sh --cog --workers 8                   # PNG + COG paralelo
+#   ./run.sh --accum-hours 6                     # acumulado de  6h (sequencial)
+#   ./run.sh --accum-hours 48                    # acumulado de 48h (sequencial)
+#   ./run.sh --accum-hours 24                    # acumulado de 24h: ACUM00Z + ACUM12Z (padrao)
+#
+# Configuracao via arquivos YAML (edite antes de rodar):
+#   config.yaml      — rodada, grade, caminhos, figura, acumulados
+#   variables.yaml   — variaveis, colormaps, limites (enabled: false para desativar)
+#
+#   Arquivos alternativos:
+#   ./run.sh --config /rodadas/run2/config.yaml --vars-file /rodadas/run2/vars.yaml
 #
 # Configuracao do caminho dos dados (escolha uma das opcoes):
 #   # 1. Via variavel de ambiente (persistente):
@@ -35,6 +45,8 @@ log_ok()    { echo -e "${GREEN}[ OK ]  $*${NC}"; }
 log_error() { echo -e "${RED}[ERRO]  $*${NC}"; }
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
+CONFIG_FILE=""  # config.yaml alternativo
+VARS_FILE=""    # variables.yaml alternativo
 DATA_BASE=""    # base SisMOM: /dados/sismom/SisMOM/sismom_forecast
 DATA_DIR=""     # caminho direto (substitui DATA_BASE)
 OUTPUT_DIR=""
@@ -42,6 +54,7 @@ ACCUM_DIR=""
 COG_DIR=""
 VARS=""
 WORKERS=$(nproc 2>/dev/null || echo 4)   # padrao: todos os CPUs
+ACCUM_HOURS=24
 ONLY_ACCUM=0
 ONLY_FIELDS=0
 SEQUENTIAL=0
@@ -54,6 +67,8 @@ QUIET=0
 # ── Parse argumentos ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --config)    CONFIG_FILE="${2:?'--config requer um valor'}";    shift 2 ;;
+        --vars-file) VARS_FILE="${2:?'--vars-file requer um valor'}";   shift 2 ;;
         # Argumentos com valor obrigatorio: verifica se $2 existe
         --data-base)
             [[ $# -lt 2 || "${2:-}" == --* || -z "${2:-}" ]] \
@@ -65,6 +80,7 @@ while [[ $# -gt 0 ]]; do
         --cog-dir)     COG_DIR="${2:?'--cog-dir requer um valor'}";      shift 2 ;;
         --vars)        VARS="${2:?'--vars requer um valor'}";            shift 2 ;;
         --workers)     WORKERS="${2:?'--workers requer um valor'}";      shift 2 ;;
+        --accum-hours) ACCUM_HOURS="${2:?'--accum-hours requer um valor'}"; shift 2 ;;
         --only-accum)  ONLY_ACCUM=1;    shift ;;
         --only-fields) ONLY_FIELDS=1;   shift ;;
         --sequential)  SEQUENTIAL=1;    shift ;;
@@ -119,12 +135,15 @@ fi
 
 # ── Montar argumentos para main.py ───────────────────────────────────────────
 PY_ARGS=()
+[[ -n "$CONFIG_FILE" ]] && PY_ARGS+=("--config"    "$CONFIG_FILE")
+[[ -n "$VARS_FILE"   ]] && PY_ARGS+=("--vars-file" "$VARS_FILE")
 [[ -n "$DATA_BASE"  ]] && PY_ARGS+=("--data_base"  "$DATA_BASE")
 [[ -n "$DATA_DIR"   ]] && PY_ARGS+=("--data_dir"   "$DATA_DIR")
 [[ -n "$OUTPUT_DIR" ]] && PY_ARGS+=("--output_dir" "$OUTPUT_DIR")
 [[ -n "$ACCUM_DIR"  ]] && PY_ARGS+=("--accum_dir"  "$ACCUM_DIR")
 [[ -n "$COG_DIR"    ]] && PY_ARGS+=("--cog_dir"    "$COG_DIR")
 [[ -n "$VARS"       ]] && PY_ARGS+=("--vars" $VARS)
+[[ "$ACCUM_HOURS"   -ne 24 ]] && PY_ARGS+=("--accum_hours" "$ACCUM_HOURS")
 [[ "$WORKERS"       -gt 1 ]] && PY_ARGS+=("--workers"    "$WORKERS")
 [[ "$ONLY_ACCUM"    -eq 1 ]] && PY_ARGS+=("--only_accum")
 [[ "$ONLY_FIELDS"   -eq 1 ]] && PY_ARGS+=("--only_fields")
@@ -135,32 +154,4 @@ PY_ARGS=()
 [[ "$SKIP_EXISTING" -eq 1 ]] && PY_ARGS+=("--skip_existing")
 [[ "$QUIET"         -eq 1 ]] && PY_ARGS+=("--quiet")
 
-# ── Log de execucao ───────────────────────────────────────────────────────────
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_FILE="$LOG_DIR/run_${TIMESTAMP}.log"
-
-echo "----------------------------------------------------"
-log_info "Figuras_Eta - Inicio: $(date '+%d/%m/%Y %H:%M:%S')"
-log_info "Scripts : $SCRIPTS_DIR"
-log_info "Log     : $LOG_FILE"
-echo "----------------------------------------------------"
-
-# ── Executar ──────────────────────────────────────────────────────────────────
-START_TIME=$SECONDS
-
-"$PYTHON_CMD" "$SCRIPTS_DIR/main.py" "${PY_ARGS[@]}" 2>&1 | tee "$LOG_FILE"
-EXIT_CODE="${PIPESTATUS[0]}"
-
-ELAPSED=$(( SECONDS - START_TIME ))
-ELAPSED_FMT=$(printf "%02d:%02d:%02d" $((ELAPSED/3600)) $((ELAPSED%3600/60)) $((ELAPSED%60)))
-
-echo "----------------------------------------------------"
-if [[ "$EXIT_CODE" -eq 0 ]]; then
-    log_ok "Concluido em $ELAPSED_FMT"
-else
-    log_error "Falha (codigo $EXIT_CODE) apos $ELAPSED_FMT"
-    log_error "Verifique: $LOG_FILE"
-fi
-echo "----------------------------------------------------"
-
-exit "$EXIT_CODE"
+# ── Log de execucao ─────────────────────────────────────────────────

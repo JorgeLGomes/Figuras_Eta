@@ -1,0 +1,433 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# variables.yaml — Definicao das variaveis 2D do modelo Eta / BESM
+#
+# A ORDEM das variaveis deve coincidir com a ordem no arquivo CTL do modelo.
+# Cada variavel ocupa uma fatia (NY x NX) consecutiva no arquivo binario.
+#
+# Campos:
+#   name        : nome da variavel (igual ao CTL)
+#   description : descricao legivel para titulos e metadados
+#   units       : unidade de medida
+#   cmap        : colormap matplotlib (ou "precip" para colormap proprio)
+#   vmin/vmax   : limites do colorbar (null = escala automatica por percentis)
+#   precip      : true se e variavel de precipitacao (conversao m->mm no COG)
+#   enabled     : false para pular completamente (plot + COG)
+#
+# Para processar apenas um subconjunto, use --vars no CLI ou edite enabled.
+# ──────────────────────────────────────────────────────────────────────────────
+
+variables:
+
+  - name: PSLM
+    description: "Pressao ao Nivel do Mar (Mesinger)"
+    units: hPa
+    cmap: RdBu_r
+    vmin: 990
+    vmax: 1030
+    precip: false
+    enabled: true
+
+  - name: PSLC
+    description: "Pressao de Superficie"
+    units: hPa
+    cmap: RdBu_r
+    vmin: 980
+    vmax: 1030
+    precip: false
+    enabled: true
+
+  - name: TP2M
+    description: "Temperatura 2 m"
+    units: K
+    cmap: RdBu_r
+    vmin: 268
+    vmax: 308
+    precip: false
+    enabled: true
+
+  - name: MXTP
+    description: "Temperatura Maxima"
+    units: K
+    cmap: hot_r
+    vmin: 270
+    vmax: 313
+    precip: false
+    enabled: true
+
+  - name: MNTP
+    description: "Temperatura Minima"
+    units: K
+    cmap: cool
+    vmin: 260
+    vmax: 305
+    precip: false
+    enabled: true
+
+  - name: DP2M
+    description: "Temperatura de Orvalho 2 m"
+    units: K
+    cmap: BrBG
+    vmin: 260
+    vmax: 300
+    precip: false
+    enabled: true
+
+  - name: US2M
+    description: "Umidade Especifica 2 m"
+    units: "%"
+    cmap: YlGnBu
+    vmin: 0
+    vmax: 100
+    precip: false
+    enabled: true
+
+  - name: UR2M
+    description: "Umidade Relativa 2 m"
+    units: kg/kg
+    cmap: YlGnBu
+    vmin: 0
+    vmax: 1
+    precip: false
+    enabled: true
+
+  - name: U10M
+    description: "Componente U do Vento 10 m"
+    units: m/s
+    cmap: bwr
+    vmin: -20
+    vmax: 20
+    precip: false
+    enabled: true
+
+  - name: V10M
+    description: "Componente V do Vento 10 m"
+    units: m/s
+    cmap: bwr
+    vmin: -20
+    vmax: 20
+    precip: false
+    enabled: true
+
+  - name: MAGV
+    description: "Magnitude do Vento 10 m"
+    units: m/s
+    cmap: YlOrRd
+    vmin: 0
+    vmax: 20
+    precip: false
+    enabled: true
+
+  - name: U100
+    description: "Componente U do Vento 100 m"
+    units: m/s
+    cmap: bwr
+    vmin: -25
+    vmax: 25
+    precip: false
+    enabled: true
+
+  - name: V100
+    description: "Componente V do Vento 100 m"
+    units: m/s
+    cmap: bwr
+    vmin: -25
+    vmax: 25
+    precip: false
+    enabled: true
+
+  - name: PREC
+    description: "Precipitacao Total"
+    units: mm/h
+    cmap: precip
+    vmin: 0
+    vmax: 50
+    precip: true
+    enabled: true
+
+  - name: PRCV
+    description: "Precipitacao Convectiva"
+    units: mm/h
+    cmap: precip
+    vmin: 0
+    vmax: 40
+    precip: true
+    enabled: true
+
+  - name: PRGE
+    description: "Precipitacao Estratiforme"
+    units: mm/h
+    cmap: precip
+    vmin: 0
+    vmax: 20
+    precip: true
+    enabled: true
+
+  - name: NEVE
+    description: "Neve"
+    units: mm/h
+    cmap: Blues
+    vmin: 0
+    vmax: 20
+    precip: true
+    enabled: true
+
+  - name: CLSF
+    description: "Fluxo de Calor Latente Sup."
+    units: W/m2
+    cmap: RdBu
+    vmin: -200
+    vmax: 600
+    precip: false
+    enabled: true
+
+  - name: CSSF
+    description: "Fluxo de Calor Sensivel Sup."
+    units: W/m2
+    cmap: RdBu
+    vmin: -50
+    vmax: 300
+    precip: false
+    enabled: true
+
+  - name: GHFL
+    description: "Fluxo de Calor no Solo"
+    units: W/m2
+    cmap: coolwarm
+    vmin: -50
+    vmax: 50
+    precip: false
+    enabled: true
+
+  - name: TSFC
+    description: "Temperatura de Superficie (skin)"
+    units: K
+    cmap: RdBu_r
+    vmin: 268
+    vmax: 320
+    precip: false
+    enabled: true
+
+  - name: TSOIL
+    description: "Temperatura do Solo"
+    units: K
+    cmap: RdBu_r
+    vmin: 270
+    vmax: 315
+    precip: false
+    enabled: true
+
+  - name: USOIL
+    description: "Umidade do Solo"
+    units: "0-1"
+    cmap: YlGnBu
+    vmin: 0
+    vmax: 1
+    precip: false
+    enabled: true
+
+  - name: SMAV
+    description: "Disponibilidade de Agua no Solo"
+    units: "-"
+    cmap: YlGnBu
+    vmin: 0
+    vmax: 1
+    precip: false
+    enabled: true
+
+  - name: RNOF
+    description: "Escoamento Superficial"
+    units: "-"
+    cmap: Blues
+    vmin: 0
+    vmax: ~           # null = escala automatica
+    precip: false
+    enabled: true
+
+  - name: RNSG
+    description: "Escoamento Subsuperficial"
+    units: "-"
+    cmap: Blues
+    vmin: 0
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: USST
+    description: "Tensao de Cisalhamento U Sup."
+    units: N/m2
+    cmap: bwr
+    vmin: -0.5
+    vmax: 0.5
+    precip: false
+    enabled: true
+
+  - name: VSST
+    description: "Tensao de Cisalhamento V Sup."
+    units: N/m2
+    cmap: bwr
+    vmin: -0.5
+    vmax: 0.5
+    precip: false
+    enabled: true
+
+  - name: LWNV
+    description: "Fracao de Nuvens Baixas"
+    units: "-"
+    cmap: Greys
+    vmin: 0
+    vmax: 1
+    precip: false
+    enabled: true
+
+  - name: MDNV
+    description: "Fracao de Nuvens Medias"
+    units: "-"
+    cmap: Greys
+    vmin: 0
+    vmax: 1
+    precip: false
+    enabled: true
+
+  - name: HINV
+    description: "Fracao de Nuvens Altas"
+    units: "-"
+    cmap: Greys
+    vmin: 0
+    vmax: 1
+    precip: false
+    enabled: true
+
+  - name: CLD
+    description: "Nebulosidade Total"
+    units: "-"
+    cmap: Greys
+    vmin: 0
+    vmax: 1
+    precip: false
+    enabled: true
+
+  - name: OCIS
+    description: "Radiacao SW Incidente Sup."
+    units: W/m2
+    cmap: YlOrRd
+    vmin: 0
+    vmax: 900
+    precip: false
+    enabled: true
+
+  - name: OLIS
+    description: "Radiacao LW Incidente Sup."
+    units: W/m2
+    cmap: inferno
+    vmin: 200
+    vmax: 450
+    precip: false
+    enabled: true
+
+  - name: OCES
+    description: "Radiacao SW Sainte Sup."
+    units: W/m2
+    cmap: YlOrRd
+    vmin: 0
+    vmax: 200
+    precip: false
+    enabled: true
+
+  - name: OLES
+    description: "Radiacao LW Sainte Sup."
+    units: W/m2
+    cmap: inferno
+    vmin: 200
+    vmax: 450
+    precip: false
+    enabled: true
+
+  - name: ROCE
+    description: "Radiacao SW Sainte TOA"
+    units: W/m2
+    cmap: YlOrRd
+    vmin: 0
+    vmax: 500
+    precip: false
+    enabled: true
+
+  - name: ROLE
+    description: "Radiacao LW Sainte TOA"
+    units: W/m2
+    cmap: inferno
+    vmin: 150
+    vmax: 300
+    precip: false
+    enabled: true
+
+  - name: ALBE
+    description: "Albedo"
+    units: "-"
+    cmap: YlGn
+    vmin: 0
+    vmax: 0.8
+    precip: false
+    enabled: true
+
+  - name: CAPE
+    description: "CAPE"
+    units: J/kg
+    cmap: hot_r
+    vmin: 0
+    vmax: 3000
+    precip: false
+    enabled: true
+
+  - name: AGPL
+    description: "Agua Precipitavel"
+    units: kg/m2
+    cmap: YlGnBu
+    vmin: 0
+    vmax: 60
+    precip: false
+    enabled: true
+
+  - name: QUINT
+    description: "Transporte Integrado de QxU"
+    units: kg/m/s
+    cmap: bwr
+    vmin: -300
+    vmax: 300
+    precip: false
+    enabled: true
+
+  - name: QVINT
+    description: "Transporte Integrado de QxV"
+    units: kg/m/s
+    cmap: bwr
+    vmin: -300
+    vmax: 300
+    precip: false
+    enabled: true
+
+  - name: CWINT
+    description: "Agua Liquida de Nuvem Integrada"
+    units: kg/m2
+    cmap: Blues
+    vmin: 0
+    vmax: 0.5
+    precip: false
+    enabled: true
+
+  - name: CIINT
+    description: "Gelo de Nuvem Integrado"
+    units: kg/m2
+    cmap: Purples
+    vmin: 0
+    vmax: 0.3
+    precip: false
+    enabled: true
+
+  - name: HPBL
+    description: "Altura da CLP"
+    units: m
+    cmap: YlOrRd
+    vmin: 0
+    vmax: 3000
+    precip: false
+    enabled: true

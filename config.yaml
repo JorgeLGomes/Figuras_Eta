@@ -1,0 +1,58 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# config.yaml — Configuracao do modelo Eta / BESM (SisMOM / CPTEC-INPE)
+#
+# Edite este arquivo para trocar de rodada ou ajustar caminhos.
+# Os scripts leem este arquivo automaticamente ao iniciar.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── Identificacao da rodada ───────────────────────────────────────────────────
+run:
+  tag: "2026060400"          # YYYYMMDDHH — prefixo dos arquivos binarios
+  # t0 e opcional; se omitido, e derivado do tag acima (formato YYYYMMDDHH)
+  # t0: "2026-06-04T00:00:00"
+  ntimes: 121                # numero de passos de tempo (inclui analise = 0)
+  dt_hours: 1                # intervalo de saida do modelo em horas
+
+# ── Grade horizontal ──────────────────────────────────────────────────────────
+grid:
+  nx: 2399                   # numero de pontos em longitude
+  ny: 1671                   # numero de pontos em latitude
+  lon0: -90.99252            # longitude do canto sudoeste (graus E)
+  lat0: -38.12884            # latitude do canto sudoeste (graus N)
+  dlon: 0.03                 # resolucao em longitude (graus)
+  dlat: 0.03                 # resolucao em latitude (graus)
+
+# ── Formato do arquivo binario (GrADS) ───────────────────────────────────────
+model:
+  undef: 1.0e+20             # valor indefinido do modelo
+  dtype: ">f4"               # tipo numpy: ">f4" big-endian, "<f4" little-endian
+  file_prefix: "Eta03_BESM_{run_tag}+"   # {run_tag} e substituido automaticamente
+  file_suffix: "_2D.bin"
+
+# ── Caminhos de dados e saida ─────────────────────────────────────────────────
+paths:
+  # Base dos dados no servidor SisMOM.
+  # Caminho completo: <data_base>/<run_tag>/regional/eta/2D/
+  # Deixe vazio ("") para usar a variavel de ambiente SISMOM_DATA_BASE
+  # ou o diretorio local data/ do projeto.
+  data_base: ""
+
+  output_dir: "figuras/campos"        # PNGs dos campos horarios
+  accum_dir:  "figuras/acumulados"    # PNGs dos acumulados
+  cog_dir:    "cog"                   # COG GeoTIFF
+  log_dir:    "logs"                  # arquivos de log
+
+# ── Configuracoes de figura ───────────────────────────────────────────────────
+figure:
+  ext: "png"                 # formato de saida: png, pdf, svg
+  dpi: 120                   # resolucao em pontos por polegada
+
+# ── Acumulados de precipitacao ────────────────────────────────────────────────
+accumulation:
+  hours: 24                  # periodo padrao de acumulo (horas)
+                             # Para 24h: gera ACUM00Z e ACUM12Z
+                             # Para outros valores: janelas sequenciais
+  precip_vars:               # variaveis para as quais gerar acumulados
+    - PREC
+    - PRCV
+    - PRGE

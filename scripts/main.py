@@ -2,16 +2,18 @@
 main.py -- Orquestrador principal de geracao de figuras do modelo Eta
 
 Uso:
+    python main.py                                      # usa config.yaml padrao
+    python main.py --config meu_config.yaml             # config alternativa
+    python main.py --vars-file minhas_vars.yaml         # variaveis alternativas
     python main.py --data_dir /caminho/para/bins
-    python main.py --data_dir . --vars TP2M MAGV PREC --sequential
-    python main.py --data_dir . --only_accum        # somente acumulados 24h
-    python main.py --data_dir . --workers 4         # paralelo (multiprocessing)
-    python main.py --data_dir . --cog               # exportar COG GeoTIFF
-    python main.py --data_dir . --cog --only_accum  # somente acumulados 24h como COG
+    python main.py --vars TP2M MAGV PREC --sequential
+    python main.py --only_accum --accum_hours 6
+    python main.py --cog --workers 8
+    python main.py --cog_only
 
 Estrutura de saida:
     figuras/campos/    -- PNG por variavel/timestep
-    figuras/acumulados_24h/ -- PNG acumulados
+    figuras/acumulados/ -- PNG acumulados
     cog/               -- COG GeoTIFF (quando --cog ativado)
 """
 
@@ -23,7 +25,25 @@ import logging
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-import config
+# ── Pre-parse --config e --vars-file ANTES de inicializar config ──────────────
+# config.py inicializa na importacao; para usar arquivos alternativos precisamos
+# chamar init_config() com os caminhos corretos logo no inicio.
+def _preparse_config_args():
+    """Extrai --config e --vars-file do argv sem processar os outros args."""
+    import argparse as _ap
+    p = _ap.ArgumentParser(add_help=False)
+    p.add_argument("--config",     default=None)
+    p.add_argument("--vars_file",  default=None)
+    p.add_argument("--vars-file",  dest="vars_file", default=None)
+    known, _ = p.parse_known_args()
+    return known.config, known.vars_file
+
+_cfg_file, _vars_file_pre = _preparse_config_args()
+
+import config as config   # noqa: E402  (importa antes de reinicializar)
+if _cfg_file or _vars_file_pre:
+    config.init_config(_cfg_file, _vars_file_pre)
+
 import reader
 import accumulate
 import export_cog
@@ -201,19 +221,22 @@ def generate_all_fields(
 # GERAÇÃO DE ACUMULADOS 24H
 # ──────────────────────────────────────────────────────────────────────────────
 
-def generate_24h_accumulations(
+def generate_accumulations(
     data_dir: str,
     output_dir: str,
+    accum_hours: int = 24,
     sequential: bool = False,
     verbose: bool = True,
 ):
-    """Gera figuras de acumulado 24h para PREC, PRCV e PRGE."""
+    """Gera figuras de acumulado de precipitacao para PREC, PRCV e PRGE."""
     if verbose:
-        print(f"\n[main] Gerando acumulados 24h para: {config.PRECIP_VARS}")
-    saved = accumulate.plot_all_24h_accumulations(data_dir, output_dir, sequential)
+        print(f"\n[main] Gerando acumulados {accum_hours}h para: {config.PRECIP_VARS}")
+    saved = accumulate.plot_all_accumulations(
+        data_dir, output_dir, accum_hours=accum_hours, sequential=sequential, verbose=verbose
+    )
     total = sum(len(v) for v in saved.values())
     if verbose:
-        print(f"[main] {total} figuras de acumulado 24h geradas.")
+        print(f"[main] {total} figuras de acumulado {accum_hours}h geradas.")
     return saved
 
 
@@ -223,7 +246,25 @@ def generate_24h_accumulations(
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Gera figuras do modelo Eta para todas as variáveis 2D."
+        description="Gera figuras do modelo Eta para todas as variaveis 2D.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    # ── Arquivos de configuracao ──────────────────────────────────────────────
+    parser.add_argument(
+        "--config", default=None,
+        help=(
+            "Arquivo de configuracao YAML do run "
+            f"(padrao: {config._DEFAULT_CONFIG}). "
+            "Ex: --config /rodadas/2026060412/config.yaml"
+        )
+    )
+    parser.add_argument(
+        "--vars-file", "--vars_file", dest="vars_file", default=None,
+        help=(
+            "Arquivo YAML com definicao das variaveis "
+            f"(padrao: {config._DEFAULT_VARIABLES}). "
+            "Permite trocar colormaps, limites e lista de variaveis sem editar o codigo."
+        )
     )
     parser.add_argument(
         "--data_base", default="",
@@ -248,7 +289,10 @@ def parse_args():
     )
     parser.add_argument(
         "--vars", nargs="+", default=None,
-        help="Variáveis a processar (padrão: todas). Ex: --vars TP2M PREC MAGV"
+        help=(
+            "Variaveis a processar. Padrao: todas com enabled=true em variables.yaml. "
+            "Ex: --vars TP2M PREC MAGV"
+        )
     )
     parser.add_argument(
         "--sequential", action="store_true",
@@ -260,7 +304,17 @@ def parse_args():
     )
     parser.add_argument(
         "--only_fields", action="store_true",
-        help="Gera somente os campos horários (sem acumulados 24h)"
+        help="Gera somente os campos horários (sem acumulados)"
+    )
+    parser.add_argument(
+        "--accum_hours", type=int, default=24,
+        help=(
+            "Periodo de acumulo de precipitacao em horas (padrao: 24). "
+            "Deve ser multiplo do intervalo de saida do modelo (DT_HOURS). "
+            "Para 24h: gera ACUM00Z e ACUM12Z (convencao sinótica). "
+            "Para outros valores (6, 12, 48, 72...): janelas sequenciais. "
+            "Exemplos: --accum_hours 6  --accum_hours 48"
+        )
     )
     parser.add_argument(
         "--workers", type=int, default=os.cpu_count() or 4,
@@ -334,6 +388,8 @@ def main():
     if verbose:
         print("=" * 60)
         print("  Geracao de figuras -- Modelo Eta / BESM")
+        print(f"  Config : {config._CONFIG_FILE}")
+        print(f"  Vars   : {config._VARS_FILE}")
         print(f"  Run    : {config.RUN_TAG}")
         print(f"  T0     : {config.T0.strftime('%d/%m/%Y %HZ')}")
         print(f"  Passos : {config.NTIMES}  ({config.DT_HOURS}h)")
@@ -341,6 +397,8 @@ def main():
         print(f"  CPUs   : {os.cpu_count()}  |  workers={args.workers}")
         if args.skip_existing:
             print(f"  Modo   : skip_existing (retomada)")
+        print(f"  Acum.  : {args.accum_hours}h"
+              + (" (ACUM00Z + ACUM12Z)" if args.accum_hours == 24 else " (sequencial)"))
         if generate_png:
             print(f"  Campos : {os.path.abspath(args.output_dir)}")
             print(f"  Acum.  : {os.path.abspath(args.accum_dir)}")
@@ -349,70 +407,6 @@ def main():
         print(f"  Log    : {log_file}")
         print("=" * 60)
 
-    if args.vars:
-        invalid = [v for v in args.vars if v not in config.VAR_NAMES]
-        if invalid:
-            print(f"[main] ERRO: variaveis invalidas: {invalid}")
-            print(f"[main] Disponiveis: {config.VAR_NAMES}")
-            sys.exit(1)
-
-    # ── Figuras PNG ───────────────────────────────────────────────────────────
-    if generate_png:
-        _load_plot_modules()
-        if not args.only_accum:
-            generate_all_fields(
-                data_dir       = data_dir,
-                output_dir     = args.output_dir,
-                vars_to_plot   = args.vars,
-                sequential     = args.sequential,
-                workers        = args.workers,
-                verbose        = verbose,
-                skip_existing  = args.skip_existing,
-            )
-
-        if not args.only_fields:
-            generate_24h_accumulations(
-                data_dir   = data_dir,
-                output_dir = args.accum_dir,
-                sequential = args.sequential,
-                verbose    = verbose,
-            )
-
-    # ── COG GeoTIFF ───────────────────────────────────────────────────────────
-    if generate_cog:
-        if not export_cog.HAS_RASTERIO:
-            print("[main] ERRO: rasterio nao instalado. Execute:")
-            print("       pip install rasterio")
-            sys.exit(1)
-
-        ovr = getattr(args, "cog_overviews", False)
-
-        if not args.only_accum:
-            if verbose:
-                print("\n[main] Exportando COG GeoTIFF -- campos por timestep...")
-            export_cog.export_all_fields_as_cog(
-                data_dir       = data_dir,
-                cog_base_dir   = cog_run_dir,
-                vars_to_export = args.vars,
-                sequential     = args.sequential,
-                workers        = args.workers,
-                verbose        = verbose,
-                overviews      = ovr,
-                skip_existing  = args.skip_existing,
-            )
-
-        if not args.only_fields:
-            if verbose:
-                print("\n[main] Exportando COG GeoTIFF -- acumulados 24h...")
-            accumulate.export_all_accumulations_as_cog(
-                data_dir      = data_dir,
-                cog_dir       = cog_run_dir,
-                sequential    = args.sequential,
-                overviews     = ovr,
-                skip_existing = args.skip_existing,
-                verbose       = verbose,
-            )
-
-
-if __name__ == "__main__":
-    main()
+    # Variaveis a processar: CLI > enabled no YAML > todas
+    vars_to_use = args.vars or config.enabled_vars()
+    invali
