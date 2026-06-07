@@ -90,6 +90,21 @@ def resolve_run_tag(run_input: str, ref_date: _date = None) -> str:
     )
 
 
+# ── Defaults de modulo (sobrescritos por init_config) ────────────────────────
+RUN_TAG = ""; T0 = None; NTIMES = 0; DT_HOURS = 1; TIMESTAMPS = []
+NX = 0; NY = 0; LON0 = 0.0; LAT0 = 0.0; DLON = 0.03; DLAT = 0.03
+LONS = []; LATS = []
+UNDEF = 1e20; DTYPE = ">f4"; FILE_PREFIX = ""; FILE_SUFFIX = ".bin"
+SISMOM_DATA_BASE = ""; DATA_DIR = ""
+OUTPUT_DIR = "figuras/campos"; ACCUM_DIR = "figuras/acumulados"
+COG_DIR = "cog"; LOG_DIR = "logs"
+DPI = 120; FIG_EXT = "png"
+COG_COMPRESS = "DEFLATE"; COG_ZLEVEL = 1; COG_PREDICTOR = 2; COG_TILE_SIZE = 512
+VARIABLES = []; VAR_NAMES = []; VAR_DESC = {}; VAR_UNITS = {}; VAR_INDEX = {}
+PRECIP_VARS = []; PRECIP_SET = set(); CMAP_CONFIG = {}
+_CONFIG_FILE = None; _VARS_FILE = None
+
+
 def init_config(config_file=None, vars_file=None, run_tag=None):
     """
     Inicializa (ou reinicializa) todas as constantes a partir dos arquivos YAML.
@@ -111,6 +126,7 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     global SISMOM_DATA_BASE, DATA_DIR
     global OUTPUT_DIR, ACCUM_DIR, COG_DIR, LOG_DIR
     global DPI, FIG_EXT
+    global COG_COMPRESS, COG_ZLEVEL, COG_PREDICTOR, COG_TILE_SIZE
     global VARIABLES, VAR_NAMES, VAR_DESC, VAR_UNITS, VAR_INDEX
     global PRECIP_VARS, PRECIP_SET
     global CMAP_CONFIG
@@ -178,6 +194,13 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     fig = cfg.get("figure", {})
     DPI     = int(fig.get("dpi", 120))
     FIG_EXT = str(fig.get("ext", "png"))
+
+    # ── COG GeoTIFF ───────────────────────────────────────────────────────────
+    cog = cfg.get("cog", {})
+    COG_COMPRESS  = str(cog.get("compress",  "DEFLATE"))
+    COG_ZLEVEL    = int(cog.get("zlevel",    1))
+    COG_PREDICTOR = int(cog.get("predictor", 2))
+    COG_TILE_SIZE = int(cog.get("tile_size", 512))
 
     # ── Variaveis ─────────────────────────────────────────────────────────────
     VARIABLES  = vars_raw

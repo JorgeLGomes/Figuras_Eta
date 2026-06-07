@@ -49,6 +49,13 @@ figure:
   ext: "png"                 # formato de saida: png, pdf, svg
   dpi: 120                   # resolucao em pontos por polegada
 
+# ── COG GeoTIFF ──────────────────────────────────────────────────────────────
+cog:
+  compress:   "DEFLATE"      # algoritmo: DEFLATE, LZW, ZSTD
+  zlevel:     1              # nivel de compressao (1=rapido, 9=maximo)
+  predictor:  2              # predictor horizontal (2=inteiro/float, 3=float32)
+  tile_size:  512            # tamanho do tile em pixels (256 ou 512)
+
 # ── Acumulados de precipitacao ────────────────────────────────────────────────
 accumulation:
   hours: 24                  # periodo padrao de acumulo (horas)

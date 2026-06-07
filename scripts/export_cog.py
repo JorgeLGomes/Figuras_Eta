@@ -53,12 +53,19 @@ import accumulate
 # PARAMETROS COG
 # ──────────────────────────────────────────────────────────────────────────────
 
-NODATA        = -9999.0
-TILE_SIZE     = 512
+NODATA          = -9999.0
 OVERVIEW_LEVELS = [2, 4, 8, 16, 32]
-COMPRESS      = "DEFLATE"       # DEFLATE (lossless) ou LZW
-ZLEVEL        = 1               # nivel de compressao (1=rapido, 9=maximo)
-PREDICTOR     = 2               # predictor horizontal para floats
+
+# Parametros COG: lidos de config.yaml (secao cog:) via config.py
+# Acesso: config.COG_COMPRESS, config.COG_ZLEVEL, config.COG_PREDICTOR, config.COG_TILE_SIZE
+def _cog_params():
+    """Retorna (compress, zlevel, predictor, tile_size) do config carregado."""
+    return (
+        getattr(config, "COG_COMPRESS",  "DEFLATE"),
+        getattr(config, "COG_ZLEVEL",    1),
+        getattr(config, "COG_PREDICTOR", 2),
+        getattr(config, "COG_TILE_SIZE", 512),
+    )
 
 # CRS: WGS84 geografico
 CRS_WGS84 = CRS.from_epsg(4326)
@@ -131,6 +138,7 @@ def write_cog(
     # Garante array nativo C-contiguous float32 (evita problemas de byte order)
     arr = np.ascontiguousarray(arr, dtype=np.float32)
 
+    _compress, _zlevel, _predictor, _tile = _cog_params()
     profile = {
         "driver"    : "GTiff",
         "dtype"     : "float32",
@@ -140,12 +148,12 @@ def write_cog(
         "crs"       : CRS_WGS84,
         "transform" : TRANSFORM,
         "nodata"    : NODATA,
-        "compress"  : COMPRESS,
-        "zlevel"    : ZLEVEL,
-        "predictor" : PREDICTOR,
+        "compress"  : _compress,
+        "zlevel"    : _zlevel,
+        "predictor" : _predictor,
         "tiled"     : True,
-        "blockxsize": TILE_SIZE,
-        "blockysize": TILE_SIZE,
+        "blockxsize": _tile,
+        "blockysize": _tile,
         "BIGTIFF"   : "IF_SAFER",
     }
 
