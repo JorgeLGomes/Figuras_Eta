@@ -296,10 +296,6 @@ def parse_args():
         help=f"Diretório de saída dos campos (padrão: {config.OUTPUT_DIR})"
     )
     parser.add_argument(
-        "--accum_dir", default=config.ACCUM_DIR,
-        help=f"Diretório de saída dos acumulados 24h (padrão: {config.ACCUM_DIR})"
-    )
-    parser.add_argument(
         "--vars", nargs="+", default=None,
         help=(
             "Variaveis a processar. Padrao: todas com enabled=true em variables.yaml. "
@@ -389,12 +385,12 @@ def main():
     else:
         data_dir = config.build_data_dir(config.RUN_TAG, base=args.data_base)
 
-    # ── Estrutura de saida: {base}/{run_tag}/{var}/  ──────────────────────────
-    # Campos horarios: output_dir/RUN_TAG/VARNAME/
-    # Acumulados:      accum_dir/RUN_TAG/VARNAME_ACUMNNh/
-    # COG:             cog_dir/RUN_TAG/VARNAME/ (flat ja era assim)
+    # ── Estrutura de saida: {base}/{run_tag}/{var[_ACUMNNh]}/  ───────────────
+    # PNG campos:    output_dir/RUN_TAG/VARNAME/
+    # PNG acumulados: output_dir/RUN_TAG/VARNAME_ACUMNNh/
+    # COG campos:    cog_dir/RUN_TAG/VARNAME/
+    # COG acumulados: cog_dir/RUN_TAG/VARNAME_ACUMNNh/
     run_output_dir = os.path.join(args.output_dir, config.RUN_TAG)
-    run_accum_dir  = os.path.join(args.accum_dir,  config.RUN_TAG)
     cog_run_dir    = os.path.join(args.cog_dir,    config.RUN_TAG)
 
     log_file = _setup_logging(config.LOG_DIR, config.RUN_TAG)
@@ -417,8 +413,7 @@ def main():
         print(f"  Acum.  : {args.accum_hours}h"
               + (" (ACUM00Z + ACUM12Z)" if args.accum_hours == 24 else " (sequencial)"))
         if generate_png:
-            print(f"  Campos : {os.path.abspath(run_output_dir)}")
-            print(f"  Acum.  : {os.path.abspath(run_accum_dir)}")
+            print(f"  PNG    : {os.path.abspath(run_output_dir)}")
         if generate_cog:
             print(f"  COG    : {os.path.abspath(cog_run_dir)}")
         print(f"  Log    : {log_file}")
@@ -451,7 +446,7 @@ def main():
         if not args.only_fields:
             generate_accumulations(
                 data_dir    = data_dir,
-                output_dir  = run_accum_dir,
+                output_dir  = run_output_dir,
                 accum_hours = args.accum_hours,
                 sequential  = args.sequential,
                 verbose     = verbose,
@@ -497,3 +492,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+                                                                                                                                                                                                                                                                                                  

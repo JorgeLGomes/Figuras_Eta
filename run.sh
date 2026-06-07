@@ -13,7 +13,7 @@
 #   ./run.sh --run 00                  # 00Z de hoje (data do sistema)
 #   export RUN_TAG=2026060600          # ou via variavel de ambiente
 #
-# Saida: {output_dir}/{run_tag}/{var}/  e  {accum_dir}/{run_tag}/{var}_ACUMNNh/
+# Saida: {output_dir}/{run_tag}/{var[_ACUMNNh]}/   (campos e acumulados sob o mesmo base)
 
 set -euo pipefail
 
@@ -42,7 +42,6 @@ VARS_FILE=""
 DATA_BASE=""
 DATA_DIR=""
 OUTPUT_DIR=""
-ACCUM_DIR=""
 COG_DIR=""
 VARS=""
 WORKERS=$(nproc 2>/dev/null || echo 4)
@@ -73,7 +72,6 @@ while [[ $# -gt 0 ]]; do
             fi ;;
         --data-dir)      DATA_DIR="${2:?'--data-dir requer um valor'}";    shift 2 ;;
         --output-dir)    OUTPUT_DIR="${2:?'--output-dir requer um valor'}"; shift 2 ;;
-        --accum-dir)     ACCUM_DIR="${2:?'--accum-dir requer um valor'}";   shift 2 ;;
         --cog-dir)       COG_DIR="${2:?'--cog-dir requer um valor'}";       shift 2 ;;
         --vars)          VARS="${2:?'--vars requer um valor'}";             shift 2 ;;
         --workers)       WORKERS="${2:?'--workers requer um valor'}";       shift 2 ;;
@@ -142,7 +140,6 @@ if [[ -n "$VARS_FILE"   ]]; then PY_ARGS+=("--vars-file"    "$VARS_FILE");   fi
 if [[ -n "$DATA_BASE"   ]]; then PY_ARGS+=("--data_base"    "$DATA_BASE");   fi
 if [[ -n "$DATA_DIR"    ]]; then PY_ARGS+=("--data_dir"     "$DATA_DIR");    fi
 if [[ -n "$OUTPUT_DIR"  ]]; then PY_ARGS+=("--output_dir"   "$OUTPUT_DIR");  fi
-if [[ -n "$ACCUM_DIR"   ]]; then PY_ARGS+=("--accum_dir"    "$ACCUM_DIR");   fi
 if [[ -n "$COG_DIR"     ]]; then PY_ARGS+=("--cog_dir"      "$COG_DIR");     fi
 if [[ -n "$VARS"        ]]; then PY_ARGS+=("--vars"         $VARS);          fi
 if [[ "$ACCUM_HOURS"  -ne 24 ]]; then PY_ARGS+=("--accum_hours"  "$ACCUM_HOURS"); fi
@@ -189,3 +186,4 @@ fi
 echo "----------------------------------------------------"
 
 exit "$EXIT_CODE"
+                                                                                                                                                                          
