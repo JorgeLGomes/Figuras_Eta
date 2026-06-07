@@ -211,6 +211,96 @@ def plot_field(
     return fpath
 
 
+
 # ──────────────────────────────────────────────────────────────────────────────
-# CONVERSÕES
-# ──────────────────────────────────────────────────────�
+# CONVERSOES
+# ──────────────────────────────────────────────────────────────────────────────
+
+def m_to_mm(arr: np.ndarray) -> np.ndarray:
+    """Converte metros para milimetros (para variaveis de precipitacao)."""
+    with np.errstate(over="ignore", invalid="ignore"):
+        return arr * 1000.0
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PLOT DE ACUMULADOS
+# ──────────────────────────────────────────────────────────────────────────────
+
+def plot_accumulation(
+    var_name: str,
+    data: np.ndarray,
+    validity,
+    accum_hours: int,
+    accum_type: str,
+    output_path: str,
+    vmax=None,
+) -> str:
+    """
+    Plota um campo acumulado de precipitacao e salva em output_path.
+
+    Parameters
+    ----------
+    var_name    : nome da variavel (ex: 'PREC')
+    data        : array (NY, NX) em mm
+    validity    : datetime de validade do acumulado
+    accum_hours : periodo de acumulo em horas
+    accum_type  : tipo da janela ('ACUM00Z', 'ACUM12Z', 'ACUM24h', ...)
+    output_path : caminho completo do arquivo de saida
+    vmax        : limite superior do colormap (None = automatico por percentil)
+
+    Returns
+    -------
+    output_path
+    """
+    import os as _os
+    _os.makedirs(_os.path.dirname(_os.path.abspath(output_path)), exist_ok=True)
+
+    arr = data.copy().astype(np.float64)
+
+    units = "mm"
+    desc  = config.VAR_DESC.get(var_name, var_name)
+
+    cmap, vmin_cfg, _ = get_cmap_config(var_name)
+    vmin = 0.0  # acumulados de precipitacao comecam em zero
+
+    if vmax is None:
+        valid = arr[~np.isnan(arr)]
+        vmax  = float(np.percentile(valid, 98)) if valid.size else 50.0
+    if vmax <= vmin:
+        vmax = vmin + 1.0
+
+    fig = plt.figure(figsize=(12, 8))
+    ax  = setup_axes(fig)
+
+    if HAS_CARTOPY:
+        im = ax.pcolormesh(
+            config.LONS, config.LATS, arr,
+            cmap=cmap, vmin=vmin, vmax=vmax,
+            transform=ccrs.PlateCarree(),
+            shading="auto",
+        )
+        ax.set_extent(
+            [config.LONS[0], config.LONS[-1], config.LATS[0], config.LATS[-1]],
+            crs=ccrs.PlateCarree(),
+        )
+    else:
+        im = ax.pcolormesh(
+            config.LONS, config.LATS, arr,
+            cmap=cmap, vmin=vmin, vmax=vmax,
+            shading="auto",
+        )
+        ax.set_xlabel("Longitude (graus)")
+        ax.set_ylabel("Latitude (graus)")
+
+    cb = fig.colorbar(im, ax=ax, orientation="vertical", pad=0.02, fraction=0.03)
+    cb.set_label(units, fontsize=10)
+
+    time_str = validity.strftime("%d/%m/%Y %HZ")
+    ax.set_title(
+        f"{var_name} -- {desc} (Acumulado {accum_hours}h -- {accum_type})\n{time_str}",
+        fontsize=11, pad=8,
+    )
+
+    plt.savefig(output_path, dpi=config.DPI, bbox_inches="tight")
+    plt.close(fig)
+    return output_path

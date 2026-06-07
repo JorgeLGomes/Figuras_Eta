@@ -24,6 +24,7 @@ import time
 import logging
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing
 
 # ── Pre-parse --config e --vars-file ANTES de inicializar config ──────────────
 # config.py inicializa na importacao; para usar arquivos alternativos precisamos
@@ -197,13 +198,15 @@ def generate_all_fields(
             )
 
     if workers > 1:
-        with ProcessPoolExecutor(max_workers=workers) as pool:
-            futs = {pool.submit(_worker_timestep, task): task for task in tasks}
-            for fut in as_completed(futs):
-                task = futs[fut]
-                ts   = task[1]
+        # maxtasksperchild=10: reinicia cada worker apos 10 tarefas para
+        # liberar memoria acumulada pelo matplotlib (evita OOM no final da rodada)
+        with multiprocessing.Pool(processes=workers, maxtasksperchild=10) as pool:
+            async_results = [(task, pool.apply_async(_worker_timestep, (task,)))
+                             for task in tasks]
+            for task, ar in async_results:
+                ts = task[1]
                 try:
-                    results = fut.result()
+                    results = ar.get(timeout=300)
                     _process_results(results, ts)
                 except Exception as e:
                     n_err += len(vars_to_plot)
