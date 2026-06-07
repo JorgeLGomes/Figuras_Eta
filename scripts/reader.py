@@ -130,7 +130,8 @@ def read_all_fields(
         ]
 
     result = {}
-    for i, (name, _, _) in enumerate(config.VARIABLES):
+    for i, v in enumerate(config.VARIABLES):
+        name = v["name"] if isinstance(v, dict) else v[0]
         arr = arrays[i].copy()
         arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
         result[name] = arr
@@ -145,4 +146,4 @@ def file_exists(data_dir: str, timestamp: datetime) -> bool:
 
 def list_available_timestamps(data_dir: str) -> list:
     """Retorna lista de timestamps para os quais existem arquivos .bin."""
-    return [t for t in config.TIMESTAMPS if file_exists(data_dir, t)]
+    return [t for t in 
