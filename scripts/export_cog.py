@@ -57,7 +57,7 @@ NODATA        = -9999.0
 TILE_SIZE     = 512
 OVERVIEW_LEVELS = [2, 4, 8, 16, 32]
 COMPRESS      = "DEFLATE"       # DEFLATE (lossless) ou LZW
-ZLEVEL        = 6               # nivel de compressao (1-9)
+ZLEVEL        = 1               # nivel de compressao (1=rapido, 9=maximo)
 PREDICTOR     = 2               # predictor horizontal para floats
 
 # CRS: WGS84 geografico

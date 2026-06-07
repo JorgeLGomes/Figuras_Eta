@@ -225,6 +225,46 @@ def accum_filename(
 # EXPORTACAO COG
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _accum_cog_worker(args):
+    """Worker paralelo para gerar um COG de acumulado."""
+    data_dir, var, win, cog_dir, accum_hours, sequential, overviews, skip_existing = args
+    import export_cog as ecog
+
+    var_dir = os.path.join(cog_dir, f"{var}_ACUM{accum_hours}h")
+    os.makedirs(var_dir, exist_ok=True)
+    fname = accum_filename(var, win['validity'], accum_hours=accum_hours)
+    fpath = os.path.join(var_dir, fname)
+
+    if skip_existing and os.path.exists(fpath):
+        return (var, win['type'], fpath, None, True)
+
+    arr = compute_accumulation(data_dir, var, win, sequential)
+    if arr is None:
+        return (var, win['type'], None, "arquivo ausente", False)
+
+    try:
+        ecog.write_cog(
+            ecog._prepare_array(arr, var),
+            fpath,
+            metadata={
+                "variable"   : var,
+                "description": config.VAR_DESC.get(var, var),
+                "units"      : "mm",
+                "accum_type" : win['type'],
+                "accum_hours": str(win['accum_hours']),
+                "start_fh"   : str(win['start_fh']),
+                "end_fh"     : str(win['end_fh']),
+                "validity"   : win['validity'].strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "model"      : f"Eta03/BESM run {config.RUN_TAG}",
+                "nodata"     : str(ecog.NODATA),
+            },
+            overviews=overviews,
+        )
+        return (var, win['type'], fpath, None, False)
+    except Exception as e:
+        return (var, win['type'], None, str(e), False)
+
+
 def export_all_accumulations_as_cog(
     data_dir: str,
     cog_dir: str,
@@ -233,6 +273,7 @@ def export_all_accumulations_as_cog(
     overviews: bool = False,
     skip_existing: bool = False,
     verbose: bool = True,
+    workers: int = 1,
 ) -> Dict[str, List[str]]:
     """
     Calcula e exporta todos os acumulados de PREC, PRCV e PRGE como COG GeoTIFF.
@@ -242,73 +283,57 @@ def export_all_accumulations_as_cog(
     accum_hours : periodo do acumulo em horas (padrao: 24)
                   Para 24h: gera ACUM00Z e ACUM12Z.
                   Para outros valores: janelas sequenciais.
+    workers     : processos paralelos (1 = serial)
     """
-    import export_cog as ecog
+    from concurrent.futures import ProcessPoolExecutor, as_completed
 
     os.makedirs(cog_dir, exist_ok=True)
     windows = get_accumulation_windows(accum_hours=accum_hours)
     saved   = {v: [] for v in config.PRECIP_VARS}
 
+    tasks = [
+        (data_dir, var, win, cog_dir, accum_hours, sequential, overviews, skip_existing)
+        for var in config.PRECIP_VARS
+        for win in windows
+    ]
+    n_total = len(tasks)
+
     if verbose:
         print(f"[accum] Periodo: {accum_hours}h | "
               f"{len(windows)} janelas x {len(config.PRECIP_VARS)} variaveis"
-              f" = {len(windows) * len(config.PRECIP_VARS)} acumulados")
+              f" = {n_total} acumulados | workers={workers}")
         for w in windows:
             print(f"  {w['type']:10s}  FH {w['start_fh']:3d}-{w['end_fh']:3d}"
                   f"  val. {w['validity'].strftime('%Y%m%d %HZ')}")
 
-    for var in config.PRECIP_VARS:
-        var_dir = os.path.join(cog_dir, f"{var}_ACUM{accum_hours}h")
-        os.makedirs(var_dir, exist_ok=True)
-        for win in windows:
-            fname = accum_filename(var, win['validity'], accum_hours=accum_hours)
-            fpath = os.path.join(var_dir, fname)
-
-            if skip_existing and os.path.exists(fpath):
-                if verbose:
-                    print(f"  SKIP  {fname}")
-                saved[var].append(fpath)
-                continue
-
-            arr = compute_accumulation(data_dir, var, win, sequential)
-            if arr is None:
-                if verbose:
-                    print(f"  [AVISO] {var} {win['type']} FH{win['start_fh']}-"
-                          f"{win['end_fh']}: arquivo ausente -> descartado")
-                continue
-
-            try:
-                # _prepare_array: m->mm, flipud, NaN->NODATA (nao multiplicar antes)
-                ecog.write_cog(
-                    ecog._prepare_array(arr, var),
-                    fpath,
-                    metadata={
-                        "variable"   : var,
-                        "description": config.VAR_DESC.get(var, var),
-                        "units"      : "mm",
-                        "accum_type" : win['type'],
-                        "accum_hours": str(win['accum_hours']),
-                        "start_fh"   : str(win['start_fh']),
-                        "end_fh"     : str(win['end_fh']),
-                        "validity"   : win['validity'].strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        "model"      : f"Eta03/BESM run {config.RUN_TAG}",
-                        "nodata"     : str(ecog.NODATA),
-                    },
-                    overviews=overviews,
-                )
+    if workers <= 1:
+        for task in tasks:
+            var, wtype, fpath, err, skipped = _accum_cog_worker(task)
+            if err:
+                if err != "arquivo ausente" and verbose:
+                    print(f"  [ERRO] {var} {wtype}: {err}")
+                elif err == "arquivo ausente" and verbose:
+                    print(f"  [AVISO] {var} {wtype}: {err}")
+            else:
                 saved[var].append(fpath)
                 if verbose:
-                    print(f"  OK  {fname}")
-            except Exception as e:
-                if verbose:
-                    print(f"  [ERRO] {var} {win['type']}: {e}")
+                    print(f"  {'SKIP' if skipped else 'OK  '}  {os.path.basename(fpath)}")
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            futs = {pool.submit(_accum_cog_worker, t): t for t in tasks}
+            for fut in as_completed(futs):
+                var, wtype, fpath, err, skipped = fut.result()
+                if err:
+                    if verbose:
+                        tag = "[AVISO]" if err == "arquivo ausente" else "[ERRO]"
+                        print(f"  {tag} {var} {wtype}: {err}")
+                else:
+                    saved[var].append(fpath)
+                    if verbose:
+                        print(f"  {'SKIP' if skipped else 'OK  '}  {os.path.basename(fpath)}")
 
     return saved
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# EXPORTACAO PNG
-# ──────────────────────────────────────────────────────────────────────────────
 
 def plot_all_accumulations(
     data_dir: str,

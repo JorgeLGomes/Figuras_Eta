@@ -491,6 +491,7 @@ def main():
                 overviews     = ovr,
                 skip_existing = args.skip_existing,
                 verbose       = verbose,
+                workers       = args.workers,
             )
 
 
