@@ -142,17 +142,26 @@ if [[ -f "$REQ_FILE" ]]; then
 fi
 
 # ── Montar argumentos para main.py ───────────────────────────────────────────
+# Nota: usa if/fi em vez de [[ ]] && para compatibilidade com set -e
 PY_ARGS=()
-[[ -n "$RUN_ARG"     ]] && PY_ARGS+=("--run"       "$RUN_ARG")
-[[ -n "$CONFIG_FILE" ]] && PY_ARGS+=("--config"    "$CONFIG_FILE")
-[[ -n "$VARS_FILE"   ]] && PY_ARGS+=("--vars-file" "$VARS_FILE")
-[[ -n "$DATA_BASE"  ]] && PY_ARGS+=("--data_base"  "$DATA_BASE")
-[[ -n "$DATA_DIR"   ]] && PY_ARGS+=("--data_dir"   "$DATA_DIR")
-[[ -n "$OUTPUT_DIR" ]] && PY_ARGS+=("--output_dir" "$OUTPUT_DIR")
-[[ -n "$ACCUM_DIR"  ]] && PY_ARGS+=("--accum_dir"  "$ACCUM_DIR")
-[[ -n "$COG_DIR"    ]] && PY_ARGS+=("--cog_dir"    "$COG_DIR")
-[[ -n "$VARS"       ]] && PY_ARGS+=("--vars" $VARS)
-[[ "$ACCUM_HOURS"   -ne 24 ]] && PY_ARGS+=("--accum_hours" "$ACCUM_HOURS")
-[[ "$WORKERS"       -gt 1 ]] && PY_ARGS+=("--workers"    "$WORKERS")
-[[ "$ONLY_ACCUM"    -eq 1 ]] && PY_ARGS+=("--only_accum")
-[[ "$ONLY_FIELDS"   -eq 1 ]] && PY_A
+if [[ -n "$RUN_ARG"     ]]; then PY_ARGS+=("--run"          "$RUN_ARG");     fi
+if [[ -n "$CONFIG_FILE" ]]; then PY_ARGS+=("--config"       "$CONFIG_FILE"); fi
+if [[ -n "$VARS_FILE"   ]]; then PY_ARGS+=("--vars-file"    "$VARS_FILE");   fi
+if [[ -n "$DATA_BASE"   ]]; then PY_ARGS+=("--data_base"    "$DATA_BASE");   fi
+if [[ -n "$DATA_DIR"    ]]; then PY_ARGS+=("--data_dir"     "$DATA_DIR");    fi
+if [[ -n "$OUTPUT_DIR"  ]]; then PY_ARGS+=("--output_dir"   "$OUTPUT_DIR");  fi
+if [[ -n "$ACCUM_DIR"   ]]; then PY_ARGS+=("--accum_dir"    "$ACCUM_DIR");   fi
+if [[ -n "$COG_DIR"     ]]; then PY_ARGS+=("--cog_dir"      "$COG_DIR");     fi
+if [[ -n "$VARS"        ]]; then PY_ARGS+=("--vars"         $VARS);          fi
+if [[ "$ACCUM_HOURS"  -ne 24 ]]; then PY_ARGS+=("--accum_hours"  "$ACCUM_HOURS"); fi
+if [[ "$WORKERS"      -gt 1  ]]; then PY_ARGS+=("--workers"      "$WORKERS");     fi
+if [[ "$ONLY_ACCUM"   -eq 1  ]]; then PY_ARGS+=("--only_accum");   fi
+if [[ "$ONLY_FIELDS"  -eq 1  ]]; then PY_ARGS+=("--only_fields");  fi
+if [[ "$SEQUENTIAL"   -eq 1  ]]; then PY_ARGS+=("--sequential");   fi
+if [[ "$COG"          -eq 1  ]]; then PY_ARGS+=("--cog");          fi
+if [[ "$COG_ONLY"     -eq 1  ]]; then PY_ARGS+=("--cog_only");     fi
+if [[ "$COG_OVERVIEWS" -eq 1 ]]; then PY_ARGS+=("--cog_overviews"); fi
+if [[ "$SKIP_EXISTING" -eq 1 ]]; then PY_ARGS+=("--skip_existing"); fi
+if [[ "$QUIET"        -eq 1  ]]; then PY_ARGS+=("--quiet");         fi
+
+A
