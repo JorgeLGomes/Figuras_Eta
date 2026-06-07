@@ -194,7 +194,7 @@ def compute_accumulation(
 
         if acc is None:
             acc = np.zeros_like(field, dtype=np.float32)
-        with np.errstate(invalid="ignore"):
+        with np.errstate(invalid="ignore", over="ignore"):
             acc = np.where(np.isnan(field) | np.isnan(acc), np.nan, acc + field)
 
     return acc
