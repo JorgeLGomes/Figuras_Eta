@@ -321,9 +321,13 @@ def _worker_cog_timestep(args):
     ts_str    = _t.strftime('%Y%m%d%H')
 
     # Identifica quais variaveis precisam ser geradas
+    # _out_dir pode ser dict {var: dir} ou str (retrocompatibilidade)
+    def _var_dir(var):
+        return _out_dir[var] if isinstance(_out_dir, dict) else _out_dir
+
     vars_needed = []
     for var in _vars:
-        fpath = os.path.join(_out_dir, f"{var}_{ts_str}.tif")
+        fpath = os.path.join(_var_dir(var), f"{var}_{ts_str}.tif")
         if _skip and os.path.exists(fpath):
             results.append((var, _t, fpath, None))
         else:
@@ -341,7 +345,7 @@ def _worker_cog_timestep(args):
     # Gera COG de cada variavel a partir dos dados ja lidos
     for var in vars_needed:
         try:
-            fpath = export_field_as_cog(fields[var], var, _t, _out_dir, overviews=_ovr)
+            fpath = export_field_as_cog(fields[var], var, _t, _var_dir(var), overviews=_ovr)
             results.append((var, _t, fpath, None))
         except Exception as e:
             results.append((var, _t, None, str(e)))
@@ -389,12 +393,17 @@ def export_all_fields_as_cog(
             f" = {len(timestamps) * len(vars_to_export)} COGs a gerar | workers={workers}"
         )
 
-    # Estrutura flat: todos os .tif direto em cog_base_dir (ex: cog/2026060400/)
+    # Estrutura por variavel: cog_base_dir/VARNAME/
     os.makedirs(cog_base_dir, exist_ok=True)
+    var_dirs = {}
+    for var in vars_to_export:
+        d = os.path.join(cog_base_dir, var)
+        os.makedirs(d, exist_ok=True)
+        var_dirs[var] = d
 
     # 1 task por TIMESTEP (nao por variavel) — leitura unica do arquivo
     tasks = [
-        (data_dir, t, vars_to_export, cog_base_dir, sequential, overviews, skip_existing)
+        (data_dir, t, vars_to_export, var_dirs, sequential, overviews, skip_existing)
         for t in timestamps
     ]
 

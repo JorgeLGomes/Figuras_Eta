@@ -389,8 +389,13 @@ def main():
     else:
         data_dir = config.build_data_dir(config.RUN_TAG, base=args.data_base)
 
-    # ── COG: estrutura cog/{run}/ (flat, sem subpasta por variavel) ───────────
-    cog_run_dir = os.path.join(args.cog_dir, config.RUN_TAG)
+    # ── Estrutura de saida: {base}/{run_tag}/{var}/  ──────────────────────────
+    # Campos horarios: output_dir/RUN_TAG/VARNAME/
+    # Acumulados:      accum_dir/RUN_TAG/VARNAME_ACUMNNh/
+    # COG:             cog_dir/RUN_TAG/VARNAME/ (flat ja era assim)
+    run_output_dir = os.path.join(args.output_dir, config.RUN_TAG)
+    run_accum_dir  = os.path.join(args.accum_dir,  config.RUN_TAG)
+    cog_run_dir    = os.path.join(args.cog_dir,    config.RUN_TAG)
 
     log_file = _setup_logging(config.LOG_DIR, config.RUN_TAG)
 
@@ -412,8 +417,8 @@ def main():
         print(f"  Acum.  : {args.accum_hours}h"
               + (" (ACUM00Z + ACUM12Z)" if args.accum_hours == 24 else " (sequencial)"))
         if generate_png:
-            print(f"  Campos : {os.path.abspath(args.output_dir)}")
-            print(f"  Acum.  : {os.path.abspath(args.accum_dir)}")
+            print(f"  Campos : {os.path.abspath(run_output_dir)}")
+            print(f"  Acum.  : {os.path.abspath(run_accum_dir)}")
         if generate_cog:
             print(f"  COG    : {os.path.abspath(cog_run_dir)}")
         print(f"  Log    : {log_file}")
@@ -435,7 +440,7 @@ def main():
         if not args.only_accum:
             generate_all_fields(
                 data_dir       = data_dir,
-                output_dir     = args.output_dir,
+                output_dir     = run_output_dir,
                 vars_to_plot   = vars_to_use,
                 sequential     = args.sequential,
                 workers        = args.workers,
@@ -446,7 +451,7 @@ def main():
         if not args.only_fields:
             generate_accumulations(
                 data_dir    = data_dir,
-                output_dir  = args.accum_dir,
+                output_dir  = run_accum_dir,
                 accum_hours = args.accum_hours,
                 sequential  = args.sequential,
                 verbose     = verbose,

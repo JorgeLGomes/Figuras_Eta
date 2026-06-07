@@ -54,7 +54,4 @@ accumulation:
   hours: 24                  # periodo padrao de acumulo (horas)
                              # Para 24h: gera ACUM00Z e ACUM12Z
                              # Para outros valores: janelas sequenciais
-  precip_vars:               # variaveis para as quais gerar acumulados
-    - PREC
-    - PRCV
-    - PRGE
+  precip_vars:               # variavei

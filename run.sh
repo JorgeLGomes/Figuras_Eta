@@ -155,40 +155,4 @@ PY_ARGS=()
 [[ "$ACCUM_HOURS"   -ne 24 ]] && PY_ARGS+=("--accum_hours" "$ACCUM_HOURS")
 [[ "$WORKERS"       -gt 1 ]] && PY_ARGS+=("--workers"    "$WORKERS")
 [[ "$ONLY_ACCUM"    -eq 1 ]] && PY_ARGS+=("--only_accum")
-[[ "$ONLY_FIELDS"   -eq 1 ]] && PY_ARGS+=("--only_fields")
-[[ "$SEQUENTIAL"  -eq 1 ]] && PY_ARGS+=("--sequential")
-[[ "$COG"           -eq 1 ]] && PY_ARGS+=("--cog")
-[[ "$COG_ONLY"      -eq 1 ]] && PY_ARGS+=("--cog_only")
-[[ "$COG_OVERVIEWS" -eq 1 ]] && PY_ARGS+=("--cog_overviews")
-[[ "$SKIP_EXISTING" -eq 1 ]] && PY_ARGS+=("--skip_existing")
-[[ "$QUIET"         -eq 1 ]] && PY_ARGS+=("--quiet")
-
-# ── Log de execucao ───────────────────────────────────────────────────────────
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_FILE="$LOG_DIR/run_${TIMESTAMP}.log"
-
-echo "----------------------------------------------------"
-log_info "Figuras_Eta - Inicio: $(date '+%d/%m/%Y %H:%M:%S')"
-log_info "Scripts : $SCRIPTS_DIR"
-log_info "Log     : $LOG_FILE"
-echo "----------------------------------------------------"
-
-# ── Executar ──────────────────────────────────────────────────────────────────
-START_TIME=$SECONDS
-
-"$PYTHON_CMD" "$SCRIPTS_DIR/main.py" "${PY_ARGS[@]}" 2>&1 | tee "$LOG_FILE"
-EXIT_CODE="${PIPESTATUS[0]}"
-
-ELAPSED=$(( SECONDS - START_TIME ))
-ELAPSED_FMT=$(printf "%02d:%02d:%02d" $((ELAPSED/3600)) $((ELAPSED%3600/60)) $((ELAPSED%60)))
-
-echo "----------------------------------------------------"
-if [[ "$EXIT_CODE" -eq 0 ]]; then
-    log_ok "Concluido em $ELAPSED_FMT"
-else
-    log_error "Falha (codigo $EXIT_CODE) apos $ELAPSED_FMT"
-    log_error "Verifique: $LOG_FILE"
-fi
-echo "----------------------------------------------------"
-
-exit "$EXIT_CODE"
+[[ "$ONLY_FIELDS"   -eq 1 ]] && PY_A

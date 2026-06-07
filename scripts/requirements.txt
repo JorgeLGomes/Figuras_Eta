@@ -9,4 +9,4 @@ matplotlib>=3.7
 # cartopy: mapas com linhas de costa (opcional, mas recomendado)
 # Instale via conda se pip falhar:
 #   conda install -c conda-forge cartopy
-# cartopy>=0.22
+# ca

@@ -165,89 +165,64 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     FILE_PREFIX = str(m["file_prefix"]).replace("{run_tag}", RUN_TAG)  # usa RUN_TAG ja resolvido
     FILE_SUFFIX = str(m["file_suffix"])
 
-    # ── Caminhos ──────────────────────────────────────────────────────────────
-    p                = cfg.get("paths", {})
-    data_base_yaml   = p.get("data_base", "")
-    SISMOM_DATA_BASE = os.environ.get("SISMOM_DATA_BASE", data_base_yaml)
-    OUTPUT_DIR       = _resolve(p.get("output_dir", "figuras/campos"))
-    ACCUM_DIR        = _resolve(p.get("accum_dir",  "figuras/acumulados"))
-    COG_DIR          = _resolve(p.get("cog_dir",    "cog"))
-    LOG_DIR          = _resolve(p.get("log_dir",    "logs"))
-    DATA_DIR         = build_data_dir(RUN_TAG)
+    # ── Caminhos ───────────────────────────────────────────────────────
+    p    = cfg["paths"]
+    SISMOM_DATA_BASE = str(p.get("data_base", "")) or os.environ.get("SISMOM_DATA_BASE", "")
+    DATA_DIR  = str(p.get("data_dir", ""))
+    OUTPUT_DIR = str(p.get("output_dir", "figuras/campos"))
+    ACCUM_DIR  = str(p.get("accum_dir",  "figuras/acumulados"))
+    COG_DIR    = str(p.get("cog_dir",    "cog"))
+    LOG_DIR    = str(p.get("log_dir",    "logs"))
 
     # ── Figura ────────────────────────────────────────────────────────────────
-    fig     = cfg.get("figure", {})
+    fig = cfg.get("figure", {})
     DPI     = int(fig.get("dpi", 120))
     FIG_EXT = str(fig.get("ext", "png"))
 
     # ── Variaveis ─────────────────────────────────────────────────────────────
-    # Inclui todas as definidas no YAML (enabled ou nao) para que a leitura
-    # binaria continue correta (a posicao no arquivo depende da ordem do CTL).
-    VARIABLES = [(v["name"], v["description"], v["units"]) for v in vars_raw]
-    VAR_NAMES = [v["name"] for v in vars_raw]
-    VAR_DESC  = {v["name"]: v["description"] for v in vars_raw}
-    VAR_UNITS = {v["name"]: v["units"]       for v in vars_raw}
-    VAR_INDEX = {v["name"]: i for i, v in enumerate(vars_raw)}
+    VARIABLES  = vars_raw
+    VAR_NAMES  = [v["name"] for v in VARIABLES]
+    VAR_DESC   = {v["name"]: v.get("description", v["name"]) for v in VARIABLES}
+    VAR_UNITS  = {v["name"]: v.get("units", "")               for v in VARIABLES}
+    VAR_INDEX  = {v["name"]: i                                   for i, v in enumerate(VARIABLES)}
+    PRECIP_VARS = [v["name"] for v in VARIABLES if v.get("precip", False)]
+    PRECIP_SET  = set(PRECIP_VARS)
     CMAP_CONFIG = {
-        v["name"]: (v.get("cmap", "viridis"), v.get("vmin"), v.get("vmax"))
-        for v in vars_raw
+        v["name"]: {
+            "cmap" : v.get("cmap",  "viridis"),
+            "vmin" : v.get("vmin",  None),
+            "vmax" : v.get("vmax",  None),
+            "precip": v.get("precip", False),
+        }
+        for v in VARIABLES
     }
 
-    # ── Acumulados ────────────────────────────────────────────────────────────
-    accum       = cfg.get("accumulation", {})
-    PRECIP_VARS = list(accum.get("precip_vars", ["PREC", "PRCV", "PRGE"]))
-    PRECIP_SET  = set(PRECIP_VARS)
+
+def enabled_vars():
+    """Retorna lista de nomes de variaveis com enabled=true em variables.yaml."""
+    return [v["name"] for v in VARIABLES if v.get("enabled", True)]
 
 
-def _resolve(rel_or_abs: str) -> str:
-    """Retorna caminho absoluto: absoluto se comecar com /, relativo ao projeto."""
-    p = pathlib.Path(rel_or_abs)
-    return str(p if p.is_absolute() else PROJECT_ROOT / p)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# UTILITARIOS DE CAMINHO
-# ──────────────────────────────────────────────────────────────────────────────
-
-def build_data_dir(run: str, base: str = "") -> str:
+def build_data_dir(run_tag: str, base: str = "") -> str:
     """
-    Constroi o caminho completo para os arquivos .bin de um run.
-
-    Prioridade:
-      1. Argumento `base` (CLI --data_base)
-      2. Variavel de ambiente SISMOM_DATA_BASE
-      3. Campo paths.data_base em config.yaml
-      4. Diretorio local data/ do projeto
-
-    Exemplos:
-      build_data_dir("2026060400", "/dados/sismom/SisMOM/sismom_forecast")
-      -> "/dados/sismom/SisMOM/sismom_forecast/2026060400/regional/eta/2D"
+    Monta o caminho para os dados de uma rodada.
+    Prioridade: --data_base CLI > SISMOM_DATA_BASE env > config.yaml > data/ local.
     """
-    effective = base or os.environ.get("SISMOM_DATA_BASE", "")
-    if not effective:
-        # Tenta pegar o valor carregado do yaml (pode nao estar inicializado ainda)
-        effective = globals().get("SISMOM_DATA_BASE", "")
-    if effective:
-        return os.path.join(effective, run, "regional", "eta", "2D")
-    return str(PROJECT_ROOT / "data")
+    effective_base = base or SISMOM_DATA_BASE
+    if effective_base:
+        return os.path.join(effective_base, run_tag, "regional", "eta", "2D")
+    if DATA_DIR:
+        return DATA_DIR
+    return os.path.join("data", run_tag)
 
 
-def enabled_vars(vars_file=None):
-    """
-    Retorna a lista de nomes de variaveis com enabled=true no YAML.
-    Util para filtrar quais variaveis processar por padrao.
-    """
-    vf = pathlib.Path(vars_file or _VARS_FILE)
-    raw = _load_yaml(vf).get("variables", [])
-    return [v["name"] for v in raw if v.get("enabled", True)]
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# INICIALIZACAO AUTOMATICA NA IMPORTACAO
-# ──────────────────────────────────────────────────────────────────────────────
-# Se RUN_TAG nao estiver disponivel (nem env nem config.yaml), a inicializacao
-# e adiada — main.py chamara init_config(run_tag=...) antes de usar os valores.
+# ── Inicializacao automatica na importacao (com arquivos padrao) ───────────────
+# Permite usar config.VAR_NAMES etc. sem chamar init_config() explicitamente.
+# main.py vai chamar init_config() de novo se --config/--vars-file/--run forem
+# passados, sobrescrevendo estes valores.
 try:
     init_config()
-except ValueError:
-    pass   # run_tag ausente; main.py vai inicializar com --run
+except Exception:
+    # Falha silenciosa na inicializacao automatica (arquivos YAML ausentes).
+    # main.py vai chamar init_config() com os caminhos corretos.
+    pass
