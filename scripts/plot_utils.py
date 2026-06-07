@@ -146,7 +146,8 @@ def plot_field(
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    arr   = data.copy().astype(np.float64)
+    with np.errstate(invalid="ignore"):
+        arr = data.copy().astype(np.float64)
     units = units_override or config.VAR_UNITS.get(var_name, "")
     desc  = config.VAR_DESC.get(var_name, var_name)
 
@@ -255,7 +256,8 @@ def plot_accumulation(
     import os as _os
     _os.makedirs(_os.path.dirname(_os.path.abspath(output_path)), exist_ok=True)
 
-    arr = data.copy().astype(np.float64)
+    with np.errstate(invalid="ignore"):
+        arr = data.copy().astype(np.float64)
 
     units = "mm"
     desc  = config.VAR_DESC.get(var_name, var_name)
