@@ -146,4 +146,4 @@ def file_exists(data_dir: str, timestamp: datetime) -> bool:
 
 def list_available_timestamps(data_dir: str) -> list:
     """Retorna lista de timestamps para os quais existem arquivos .bin."""
-    return [t for t in 
+    return [t for t in config.TIMESTAMPS if file_exists(data_dir, t)]
