@@ -153,6 +153,11 @@ def generate_all_fields(
     for var in vars_to_plot:
         os.makedirs(os.path.join(output_dir, var), exist_ok=True)
 
+    # Pre-aquece matplotlib no processo principal para que os workers (fork)
+    # herdem o fontcache ja inicializado — evita race condition / crash no fork
+    if workers > 1:
+        _load_plot_modules()
+
     # Tarefas por timestep (1 leitura = todas as variáveis)
     tasks = [
         (data_dir, t, vars_to_plot, output_dir, sequential, skip_existing)
@@ -492,4 +497,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-                                                                                                                                                                                                                                                                                                  
+                                                                                 
