@@ -1,14 +1,13 @@
 @echo off
 REM git_push.bat -- Envia commits pendentes para o repositorio remoto
 REM
-REM   perf: reducao de tempo de geracao dos COGs
-REM     - export_cog.py: ZLEVEL 6->1 (~3-5x mais rapido por write, lossless)
-REM     - accumulate.py: acumulados COG agora paralelos (ProcessPoolExecutor)
-REM       novo parametro workers= repassado de args.workers
+REM   feat: parametros COG configuráveis via config.yaml
+REM     - config.yaml: nova secao cog: compress/zlevel/predictor/tile_size
+REM     - config.py: le cog: e expoe COG_COMPRESS, COG_ZLEVEL, etc.
+REM     - export_cog.py: write_cog usa _cog_params() em vez de constantes
 REM
-REM   fix(accumulate): suprimir overflow em acc + field (errstate over+invalid)
-REM   fix(reader): restaurar lista_available_timestamps + VARIABLES dict fix
-REM   fix(run.sh): reescrever completo (line 167: A: command not found)
+REM   perf: ZLEVEL 6->1 + acumulados COG em paralelo (ProcessPoolExecutor)
+REM   fix(accumulate/reader): suprimir overflow/invalid em numpy
 
 echo Enviando commits para origin/main...
 git push origin main
