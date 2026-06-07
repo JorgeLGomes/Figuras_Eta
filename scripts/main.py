@@ -206,7 +206,7 @@ def generate_all_fields(
             for task, ar in async_results:
                 ts = task[1]
                 try:
-                    results = ar.get(timeout=300)
+                    results = ar.get(timeout=1800)
                     _process_results(results, ts)
                 except Exception as e:
                     n_err += len(vars_to_plot)
