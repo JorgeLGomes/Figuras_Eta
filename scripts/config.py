@@ -248,4 +248,3 @@ except Exception:
     # Falha silenciosa na inicializacao automatica (arquivos YAML ausentes).
     # main.py vai chamar init_config() com os caminhos corretos.
     pass
-                                                                                                                           

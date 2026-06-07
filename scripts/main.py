@@ -12,9 +12,9 @@ Uso:
     python main.py --cog_only
 
 Estrutura de saida:
-    figuras/campos/    -- PNG por variavel/timestep
-    figuras/acumulados/ -- PNG acumulados
-    cog/               -- COG GeoTIFF (quando --cog ativado)
+    figuras/{run_tag}/{var}/         -- PNG campos horarios
+    figuras/{run_tag}/{var}_ACUMNNh/ -- PNG acumulados
+    cog/{run_tag}/{var}/             -- COG GeoTIFF (quando --cog ativado)
 """
 
 import os
@@ -497,4 +497,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-                                                                                 
