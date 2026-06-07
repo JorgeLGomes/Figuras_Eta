@@ -1,23 +1,17 @@
 @echo off
 REM git_push.bat -- Envia commits pendentes para o repositorio remoto
-REM Execute este arquivo no Windows para fazer o push do branch main.
 REM
-REM Alteracoes incluidas neste push:
+REM   fix(accumulate): suprimir overflow em acc + field
+REM     - np.errstate(over='ignore') na soma acumulada
 REM
-REM   fix: suprimir RuntimeWarning de NaN/overflow em numpy
-REM     - reader.py: np.errstate(invalid='ignore') em read_all_fields
-REM     - export_cog.py: np.errstate(over='ignore') na conversao m->mm
+REM   fix: suprimir RuntimeWarning NaN/overflow em numpy
+REM     - reader.py: errstate em read_all_fields
+REM     - export_cog.py: errstate na conversao m->mm
 REM
-REM   fix(reader): restaurar linha truncada em list_available_timestamps
-REM     - Corrige SyntaxError '[' was never closed ao importar reader.py
-REM
-REM   fix(reader): VARIABLES e lista de dicts apos refatoracao YAML
-REM     - Corrige "too many values to unpack (expected 3)"
-REM
-REM   fix(run.sh): reescrever completo -- restaurar secao de execucao truncada
-REM     - Corrige "line 167: A: command not found"
+REM   fix(reader): restaurar lista_available_timestamps + VARIABLES dict fix
+REM   fix(run.sh): reescrever completo (line 167: A: command not found)
 
-echo Enviando commits pendentes para origin/main...
+echo Enviando commits para origin/main...
 git push origin main
 if %ERRORLEVEL% neq 0 (
     echo ERRO: git push falhou.
