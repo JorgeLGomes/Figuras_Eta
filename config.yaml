@@ -39,8 +39,9 @@ paths:
   # ou o diretorio local data/ do projeto.
   data_base: ""
 
-  output_dir: "figuras"               # PNGs (campos e acumulados): {output_dir}/{run_tag}/{var[_ACUMNNh]}/
-  cog_dir:    "cog"                   # COG GeoTIFF:  {cog_dir}/{run_tag}/{var[_ACUMNNh]}/
+  output_dir: "/dados/sismom/SisMOM/sismom_fig/Figuras_Eta/saida"  # base de saida (caminho completo recomendado)
+                                      # png/{run_tag}/{var[_ACUMNNh]}/ -- figuras PNG
+                                      # tif/{run_tag}/{var[_ACUMNNh]}/ -- COG GeoTIFF
   log_dir:    "logs"                  # arquivos de log
 
 # ── Configuracoes de figura ───────────────────────────────────────────────────

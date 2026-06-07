@@ -350,10 +350,6 @@ def parse_args():
         help="Exportar campos como Cloud Optimized GeoTIFF (requer rasterio)"
     )
     parser.add_argument(
-        "--cog_dir", default=config.COG_DIR,
-        help=f"Diretorio de saida dos COGs (padrao: {config.COG_DIR})"
-    )
-    parser.add_argument(
         "--cog_overviews", action="store_true",
         help="Embutir overviews (piramides) nos COGs — pode causar multiplas "
              "camadas em alguns visualizadores (ex: SisMOM). Padrao: desativado."
@@ -393,13 +389,13 @@ def main():
     else:
         data_dir = config.build_data_dir(config.RUN_TAG, base=args.data_base)
 
-    # ── Estrutura de saida: {base}/{run_tag}/{var[_ACUMNNh]}/  ───────────────
-    # PNG campos:    output_dir/RUN_TAG/VARNAME/
-    # PNG acumulados: output_dir/RUN_TAG/VARNAME_ACUMNNh/
-    # COG campos:    cog_dir/RUN_TAG/VARNAME/
-    # COG acumulados: cog_dir/RUN_TAG/VARNAME_ACUMNNh/
-    run_output_dir = os.path.join(args.output_dir, config.RUN_TAG)
-    cog_run_dir    = os.path.join(args.cog_dir,    config.RUN_TAG)
+    # ── Estrutura de saida: {output_dir}/{tipo}/{run_tag}/{var[_ACUMNNh]}/  ──
+    # PNG campos:     output_dir/png/RUN_TAG/VARNAME/
+    # PNG acumulados: output_dir/png/RUN_TAG/VARNAME_ACUMNNh/
+    # COG campos:     output_dir/tif/RUN_TAG/VARNAME/
+    # COG acumulados: output_dir/tif/RUN_TAG/VARNAME_ACUMNNh/
+    run_output_dir = os.path.join(args.output_dir, "png", config.RUN_TAG)
+    cog_run_dir    = os.path.join(args.output_dir, "tif", config.RUN_TAG)
 
     log_file = _setup_logging(config.LOG_DIR, config.RUN_TAG)
 
@@ -423,7 +419,7 @@ def main():
         if generate_png:
             print(f"  PNG    : {os.path.abspath(run_output_dir)}")
         if generate_cog:
-            print(f"  COG    : {os.path.abspath(cog_run_dir)}")
+            print(f"  TIF    : {os.path.abspath(cog_run_dir)}")
         print(f"  Log    : {log_file}")
         print("=" * 60)
 

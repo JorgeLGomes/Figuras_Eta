@@ -96,8 +96,8 @@ NX = 0; NY = 0; LON0 = 0.0; LAT0 = 0.0; DLON = 0.03; DLAT = 0.03
 LONS = []; LATS = []
 UNDEF = 1e20; DTYPE = ">f4"; FILE_PREFIX = ""; FILE_SUFFIX = ".bin"
 SISMOM_DATA_BASE = ""; DATA_DIR = ""
-OUTPUT_DIR = "figuras"
-COG_DIR = "cog"; LOG_DIR = "logs"
+OUTPUT_DIR = "saida"
+LOG_DIR = "logs"
 DPI = 120; FIG_EXT = "png"
 COG_COMPRESS = "DEFLATE"; COG_ZLEVEL = 1; COG_PREDICTOR = 2; COG_TILE_SIZE = 512
 VARIABLES = []; VAR_NAMES = []; VAR_DESC = {}; VAR_UNITS = {}; VAR_INDEX = {}
@@ -124,7 +124,7 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     global NX, NY, LON0, LAT0, DLON, DLAT, LONS, LATS
     global UNDEF, DTYPE, FILE_PREFIX, FILE_SUFFIX
     global SISMOM_DATA_BASE, DATA_DIR
-    global OUTPUT_DIR, COG_DIR, LOG_DIR
+    global OUTPUT_DIR, LOG_DIR
     global DPI, FIG_EXT
     global COG_COMPRESS, COG_ZLEVEL, COG_PREDICTOR, COG_TILE_SIZE
     global VARIABLES, VAR_NAMES, VAR_DESC, VAR_UNITS, VAR_INDEX
@@ -185,8 +185,7 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     p    = cfg["paths"]
     SISMOM_DATA_BASE = str(p.get("data_base", "")) or os.environ.get("SISMOM_DATA_BASE", "")
     DATA_DIR  = str(p.get("data_dir", ""))
-    OUTPUT_DIR = str(p.get("output_dir", "figuras"))
-    COG_DIR    = str(p.get("cog_dir",    "cog"))
+    OUTPUT_DIR = str(p.get("output_dir", "saida"))
     LOG_DIR    = str(p.get("log_dir",    "logs"))
 
     # ── Figura ────────────────────────────────────────────────────────────────
