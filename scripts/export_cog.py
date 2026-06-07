@@ -90,7 +90,8 @@ def _prepare_array(data: np.ndarray, var_name: str) -> np.ndarray:
     arr = data.astype(np.float32)
 
     if var_name in _PRECIP_VARS:
-        arr = arr * 1000.0          # m -> mm
+        with np.errstate(over="ignore", invalid="ignore"):
+            arr = arr * 1000.0      # m -> mm
 
     arr = np.flipud(arr)            # S->N para N->S
 

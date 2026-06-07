@@ -133,7 +133,8 @@ def read_all_fields(
     for i, v in enumerate(config.VARIABLES):
         name = v["name"] if isinstance(v, dict) else v[0]
         arr = arrays[i].copy()
-        arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
+        with np.errstate(invalid="ignore"):
+            arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
         result[name] = arr
 
     return result
