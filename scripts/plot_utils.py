@@ -64,7 +64,14 @@ def get_cmap_config(var_name: str):
 
     O cmap retornado pode ser string ou objeto matplotlib colormap.
     """
-    raw_cmap, vmin, vmax = config.CMAP_CONFIG.get(var_name, ("viridis", None, None))
+    cfg = config.CMAP_CONFIG.get(var_name, {})
+    if isinstance(cfg, dict):
+        raw_cmap = cfg.get("cmap",  "viridis")
+        vmin     = cfg.get("vmin")
+        vmax     = cfg.get("vmax")
+    else:
+        # compatibilidade retroativa com tupla (cmap, vmin, vmax)
+        raw_cmap, vmin, vmax = cfg
     return _resolve_cmap(raw_cmap), vmin, vmax
 
 
@@ -206,8 +213,4 @@ def plot_field(
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CONVERSÕES
-# ──────────────────────────────────────────────────────────────────────────────
-
-def m_to_mm(arr: np.ndarray) -> np.ndarray:
-    """Converte metros → milímetros (para variáveis de precipitação)."""
-    return arr * 1000.0
+# ──────────────────────────────────────────────────────�
