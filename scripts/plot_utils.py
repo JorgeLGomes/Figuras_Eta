@@ -1,8 +1,9 @@
 """
-plot_utils.py — Utilitários comuns de plot para o modelo Eta
+plot_utils.py — Utilitarios comuns de plot para o modelo Eta
 """
 
 import os
+import threading
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -11,76 +12,65 @@ import matplotlib.colors as mcolors
 import matplotlib.ticker as mticker
 from datetime import datetime
 
-# Tenta usar cartopy; se não disponível, usa matplotlib puro
+# Tenta usar cartopy; se nao disponivel, usa matplotlib puro
 try:
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
     HAS_CARTOPY = True
 except ImportError:
     HAS_CARTOPY = False
-    print("[plot_utils] cartopy não encontrado — usando matplotlib puro.")
+    print("[plot_utils] cartopy nao encontrado -- usando matplotlib puro.")
 
 import config
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# COLORMAPS POR VARIÁVEL
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
+# COLORMAPS POR VARIAVEL
+# ------------------------------------------------------------------------------
 
 def _precip_cmap():
-    """Colormap branco→azul escuro para precipitação."""
+    """Colormap branco->azul escuro para precipitacao."""
     colors = [
-        (1.00, 1.00, 1.00),   # 0  branco
-        (0.75, 0.93, 1.00),   # leve
+        (1.00, 1.00, 1.00),
+        (0.75, 0.93, 1.00),
         (0.38, 0.75, 1.00),
         (0.00, 0.56, 0.94),
         (0.00, 0.39, 0.75),
-        (0.00, 0.20, 0.60),   # intenso
-        (0.30, 0.00, 0.50),   # extremo
+        (0.00, 0.20, 0.60),
+        (0.30, 0.00, 0.50),
     ]
     return mcolors.LinearSegmentedColormap.from_list("precip", colors)
 
 
-# Colormap especial "precip" referenciado no variables.yaml
 _PRECIP_CMAP = _precip_cmap()
-
-# Nomes reservados de colormaps proprios (mapeados de string para objeto)
-_CUSTOM_CMAPS = {
-    "precip": _PRECIP_CMAP,
-}
+_CUSTOM_CMAPS = {"precip": _PRECIP_CMAP}
 
 
 def _resolve_cmap(cmap_name):
-    """Converte string de colormap (incluindo nomes proprios) para objeto matplotlib."""
+    """Converte string de colormap para objeto matplotlib."""
     if isinstance(cmap_name, str):
         return _CUSTOM_CMAPS.get(cmap_name, cmap_name)
-    return cmap_name   # ja e um objeto colormap
+    return cmap_name
 
 
 def get_cmap_config(var_name: str):
-    """
-    Retorna (cmap, vmin, vmax) para a variavel a partir de config.CMAP_CONFIG
-    (carregado de variables.yaml).
-
-    O cmap retornado pode ser string ou objeto matplotlib colormap.
-    """
+    """Retorna (cmap, vmin, vmax) para a variavel."""
     cfg = config.CMAP_CONFIG.get(var_name, {})
     if isinstance(cfg, dict):
-        raw_cmap = cfg.get("cmap",  "viridis")
+        raw_cmap = cfg.get("cmap", "viridis")
         vmin     = cfg.get("vmin")
         vmax     = cfg.get("vmax")
     else:
-        # compatibilidade retroativa com tupla (cmap, vmin, vmax)
         raw_cmap, vmin, vmax = cfg
     return _resolve_cmap(raw_cmap), vmin, vmax
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 # SETUP DO MAPA
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 
 def _setup_axes_cartopy(fig, rect=111):
-    """Cria eixo com projeção PlateCarree (cartopy)."""
+    """Cria eixo com projecao PlateCarree (cartopy)."""
     proj = ccrs.PlateCarree()
     ax   = fig.add_subplot(rect, projection=proj)
     ax.add_feature(cfeature.COASTLINE.with_scale("50m"), linewidth=0.6, color="k")
@@ -98,7 +88,7 @@ def _setup_axes_cartopy(fig, rect=111):
 def _setup_axes_plain(fig, rect=111):
     """Cria eixo simples sem cartopy."""
     ax = fig.add_subplot(rect)
-    ax.set_aspect("equal")
+    ax.set_aspect("auto")
     ax.grid(True, linewidth=0.3, color="0.7", linestyle="--")
     return ax
 
@@ -109,9 +99,24 @@ def setup_axes(fig, rect=111):
     return _setup_axes_plain(fig, rect)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# PLOT GENÉRICO DE CAMPO 2D
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
+# CACHE DE FIGURA POR PROCESSO
+# Reutiliza fig entre campos do mesmo worker (evita overhead de criacao)
+# ------------------------------------------------------------------------------
+
+_proc_local = threading.local()
+
+
+def _get_fig():
+    """Retorna (ou cria) a figura reutilizavel do processo atual."""
+    if not getattr(_proc_local, "fig", None):
+        _proc_local.fig = plt.figure(figsize=(12, 8))
+    return _proc_local.fig
+
+
+# ------------------------------------------------------------------------------
+# PLOT GENERICO DE CAMPO 2D
+# ------------------------------------------------------------------------------
 
 def plot_field(
     data: np.ndarray,
@@ -128,17 +133,10 @@ def plot_field(
     """
     Plota um campo 2D e salva como imagem.
 
-    Parameters
-    ----------
-    data          : array (NY, NX)
-    var_name      : nome da variável (config.VAR_NAMES)
-    timestamp     : datetime do campo
-    output_dir    : diretório de saída
-    title_extra   : texto adicional no título (ex: "Acumulado 24h")
-    units_override: sobrescreve a unidade do config
-    vmin/vmax_override: sobrescreve os limites do colormap
-    cmap_override : sobrescreve o colormap
-    convert_fn    : função de conversão aplicada aos dados (ex: m→mm)
+    Otimizacoes vs versao anterior:
+    - imshow (grade regular): 5-10x mais rapido que pcolormesh
+    - compress_level=1: PNG mais rapido de escrever
+    - Figura reutilizada por processo: sem overhead de criacao/destruicao
 
     Returns
     -------
@@ -162,7 +160,6 @@ def plot_field(
     if vmax_override is not None:
         vmax = vmax_override
 
-    # Escala automática por percentis se vmin/vmax não definidos
     valid = arr[~np.isnan(arr)]
     if vmin is None:
         vmin = float(np.percentile(valid, 2))  if valid.size else 0
@@ -171,10 +168,10 @@ def plot_field(
     if vmin == vmax:
         vmax = vmin + 1
 
-    fig = plt.figure(figsize=(12, 8))
-    ax  = setup_axes(fig)
-
     if HAS_CARTOPY:
+        # Cartopy: cria nova figura (axes cartopy nao sao reutilizaveis)
+        fig = plt.figure(figsize=(12, 8))
+        ax  = _setup_axes_cartopy(fig)
         im = ax.pcolormesh(
             config.LONS, config.LATS, arr,
             cmap=cmap, vmin=vmin, vmax=vmax,
@@ -186,46 +183,54 @@ def plot_field(
             crs=ccrs.PlateCarree(),
         )
     else:
-        im = ax.pcolormesh(
-            config.LONS, config.LATS, arr,
+        # Matplotlib puro: reutiliza figura; imshow >> pcolormesh em grade regular
+        fig = _get_fig()
+        fig.clear()
+        ax = _setup_axes_plain(fig)
+        im = ax.imshow(
+            arr,
+            extent=[config.LONS[0], config.LONS[-1], config.LATS[0], config.LATS[-1]],
+            origin="lower",
+            aspect="auto",
             cmap=cmap, vmin=vmin, vmax=vmax,
-            shading="auto",
+            interpolation="nearest",
         )
-        ax.set_xlabel("Longitude (°)")
-        ax.set_ylabel("Latitude (°)")
+        ax.set_xlabel("Longitude (graus)")
+        ax.set_ylabel("Latitude (graus)")
 
     cb = fig.colorbar(im, ax=ax, orientation="vertical", pad=0.02, fraction=0.03)
     cb.set_label(units, fontsize=10)
 
     time_str = timestamp.strftime("%d/%m/%Y %HZ")
-    extra    = f" — {title_extra}" if title_extra else ""
-    ax.set_title(f"{var_name} — {desc}{extra}\n{time_str}", fontsize=11, pad=8)
+    extra    = f" -- {title_extra}" if title_extra else ""
+    ax.set_title(f"{var_name} -- {desc}{extra}\n{time_str}", fontsize=11, pad=8)
 
-    # Nome do arquivo: VAR_YYYYMMDDHH[_extra].png
     extra_tag = title_extra.replace(" ", "_").lower() if title_extra else ""
     extra_tag = f"_{extra_tag}" if extra_tag else ""
-    fname     = f"{var_name}_{timestamp.strftime('%Y%m%d%H')}{extra_tag}.{config.FIG_EXT}"
-    fpath     = os.path.join(output_dir, fname)
+    fname = f"{var_name}_{timestamp.strftime('%Y%m%d%H')}{extra_tag}.{config.FIG_EXT}"
+    fpath = os.path.join(output_dir, fname)
 
-    plt.savefig(fpath, dpi=config.DPI, bbox_inches="tight")
-    plt.close(fig)
+    # compress_level=1: compressao minima = PNG mais rapido de gravar em disco
+    fig.savefig(fpath, dpi=config.DPI, bbox_inches="tight",
+                pil_kwargs={"compress_level": 1})
+    if HAS_CARTOPY:
+        plt.close(fig)
     return fpath
 
 
-
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 # CONVERSOES
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 
 def m_to_mm(arr: np.ndarray) -> np.ndarray:
-    """Converte metros para milimetros (para variaveis de precipitacao)."""
+    """Converte metros para milimetros."""
     with np.errstate(over="ignore", invalid="ignore"):
         return arr * 1000.0
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 # PLOT DE ACUMULADOS
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 
 def plot_accumulation(
     var_name: str,
@@ -237,24 +242,9 @@ def plot_accumulation(
     vmax=None,
 ) -> str:
     """
-    Plota um campo acumulado de precipitacao e salva em output_path.
-
-    Parameters
-    ----------
-    var_name    : nome da variavel (ex: 'PREC')
-    data        : array (NY, NX) em mm
-    validity    : datetime de validade do acumulado
-    accum_hours : periodo de acumulo em horas
-    accum_type  : tipo da janela ('ACUM00Z', 'ACUM12Z', 'ACUM24h', ...)
-    output_path : caminho completo do arquivo de saida
-    vmax        : limite superior do colormap (None = automatico por percentil)
-
-    Returns
-    -------
-    output_path
+    Plota campo acumulado de precipitacao e salva em output_path.
     """
-    import os as _os
-    _os.makedirs(_os.path.dirname(_os.path.abspath(output_path)), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
     with np.errstate(invalid="ignore"):
         arr = data.copy().astype(np.float64)
@@ -262,8 +252,8 @@ def plot_accumulation(
     units = "mm"
     desc  = config.VAR_DESC.get(var_name, var_name)
 
-    cmap, vmin_cfg, _ = get_cmap_config(var_name)
-    vmin = 0.0  # acumulados de precipitacao comecam em zero
+    cmap, _, _ = get_cmap_config(var_name)
+    vmin = 0.0
 
     if vmax is None:
         valid = arr[~np.isnan(arr)]
@@ -271,10 +261,9 @@ def plot_accumulation(
     if vmax <= vmin:
         vmax = vmin + 1.0
 
-    fig = plt.figure(figsize=(12, 8))
-    ax  = setup_axes(fig)
-
     if HAS_CARTOPY:
+        fig = plt.figure(figsize=(12, 8))
+        ax  = _setup_axes_cartopy(fig)
         im = ax.pcolormesh(
             config.LONS, config.LATS, arr,
             cmap=cmap, vmin=vmin, vmax=vmax,
@@ -286,10 +275,16 @@ def plot_accumulation(
             crs=ccrs.PlateCarree(),
         )
     else:
-        im = ax.pcolormesh(
-            config.LONS, config.LATS, arr,
+        fig = _get_fig()
+        fig.clear()
+        ax = _setup_axes_plain(fig)
+        im = ax.imshow(
+            arr,
+            extent=[config.LONS[0], config.LONS[-1], config.LATS[0], config.LATS[-1]],
+            origin="lower",
+            aspect="auto",
             cmap=cmap, vmin=vmin, vmax=vmax,
-            shading="auto",
+            interpolation="nearest",
         )
         ax.set_xlabel("Longitude (graus)")
         ax.set_ylabel("Latitude (graus)")
@@ -303,6 +298,8 @@ def plot_accumulation(
         fontsize=11, pad=8,
     )
 
-    plt.savefig(output_path, dpi=config.DPI, bbox_inches="tight")
-    plt.close(fig)
+    fig.savefig(output_path, dpi=config.DPI, bbox_inches="tight",
+                pil_kwargs={"compress_level": 1})
+    if HAS_CARTOPY:
+        plt.close(fig)
     return output_path
