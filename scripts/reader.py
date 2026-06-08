@@ -10,14 +10,32 @@ from datetime import datetime
 import config
 
 
-def _build_filename(data_dir: str, timestamp: datetime) -> str:
-    """
-    Monta o nome do arquivo a partir do timestamp.
-    CTL template: Eta03_BESM_2026060400+%y4%m2%d2%h2_2D.bin
-    """
-    tag = timestamp.strftime("%Y%m%d%H")
+# Formatos de timestamp tentados na ordem (do mais completo ao mais curto).
+# Alguns modelos omitem o mes no nome do arquivo (ex: %Y%d%H = YYYYDDHH).
+_TIMESTAMP_FORMATS = [
+    "%Y%m%d%H",   # 10 chars: YYYYMMDDHH  (padrao 2D)
+    "%Y%d%H",     # 8 chars:  YYYYDDHH    (3D sem mes)
+    "%Y%m%d",     # 8 chars:  YYYYMMDD    (sem hora)
+]
+
+
+def _build_filename(data_dir: str, timestamp: datetime, fmt: str = "%Y%m%d%H") -> str:
+    """Monta o nome do arquivo com um formato de timestamp especifico."""
+    tag = timestamp.strftime(fmt)
     fname = f"{config.FILE_PREFIX}{tag}{config.FILE_SUFFIX}"
     return os.path.join(data_dir, fname)
+
+
+def _resolve_filename(data_dir: str, timestamp: datetime):
+    """
+    Tenta multiplos formatos de timestamp para localizar o arquivo .bin.
+    Retorna o caminho completo se encontrado, ou None.
+    """
+    for fmt in _TIMESTAMP_FORMATS:
+        fpath = _build_filename(data_dir, timestamp, fmt)
+        if os.path.exists(fpath):
+            return fpath
+    return None
 
 
 def read_field(
@@ -42,9 +60,13 @@ def read_field(
     -------
     np.ndarray shape (NY, NX) com undef substituído por np.nan
     """
-    fpath = _build_filename(data_dir, timestamp)
-    if not os.path.exists(fpath):
-        raise FileNotFoundError(f"Arquivo não encontrado: {fpath}")
+    fpath = _resolve_filename(data_dir, timestamp)
+    if fpath is None:
+        tag = timestamp.strftime("%Y%m%d%H")
+        raise FileNotFoundError(
+            "Arquivo nao encontrado para " + tag + " em '" + data_dir + "' "
+            "(prefixo=" + repr(config.FILE_PREFIX) + ", sufixo=" + repr(config.FILE_SUFFIX) + ")"
+        )
 
     dtype   = dtype or config.DTYPE
     nx, ny  = config.NX, config.NY
@@ -99,9 +121,13 @@ def read_all_fields(
     -------
     dict {var_name: np.ndarray (NY, NX)}
     """
-    fpath = _build_filename(data_dir, timestamp)
-    if not os.path.exists(fpath):
-        raise FileNotFoundError(f"Arquivo não encontrado: {fpath}")
+    fpath = _resolve_filename(data_dir, timestamp)
+    if fpath is None:
+        tag = timestamp.strftime("%Y%m%d%H")
+        raise FileNotFoundError(
+            "Arquivo nao encontrado para " + tag + " em '" + data_dir + "' "
+            "(prefixo=" + repr(config.FILE_PREFIX) + ", sufixo=" + repr(config.FILE_SUFFIX) + ")"
+        )
 
     dtype   = dtype or config.DTYPE
     nx, ny  = config.NX, config.NY
@@ -141,8 +167,8 @@ def read_all_fields(
 
 
 def file_exists(data_dir: str, timestamp: datetime) -> bool:
-    """Verifica se o arquivo correspondente ao timestamp existe."""
-    return os.path.exists(_build_filename(data_dir, timestamp))
+    """Verifica se o arquivo correspondente ao timestamp existe (qualquer formato)."""
+    return _resolve_filename(data_dir, timestamp) is not None
 
 
 def list_available_timestamps(data_dir: str) -> list:
