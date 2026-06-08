@@ -143,39 +143,57 @@ def read_all_fields(
             "(prefixo=" + repr(config.FILE_PREFIX) + ", sufixo=" + repr(config.FILE_SUFFIX) + ")"
         )
 
-    dtype   = dtype or config.DTYPE
-    nx, ny  = config.NX, config.NY
-    nfloats = nx * ny
-    nvars   = len(config.VARIABLES)
+    dtype    = dtype or config.DTYPE
+    nx, ny   = config.NX, config.NY
+    nfloats  = nx * ny
+    # Total de campos binarios (sum de max(nlev,1) por variavel)
+    n_fields = getattr(config, "NVARS_FIELDS", len(config.VARIABLES))
 
     if sequential:
-        arrays = []
+        # Le todos os campos crus de uma vez
+        all_raw = []
         with open(fpath, "rb") as f:
-            for _ in range(nvars):
+            for _ in range(n_fields):
                 rec_len = int(np.frombuffer(f.read(4), dtype=">u4")[0])
                 raw     = f.read(rec_len)
                 f.read(4)
-                arr = np.frombuffer(raw, dtype=dtype).astype(np.float32).reshape((ny, nx))
-                arrays.append(arr)
+                all_raw.append(
+                    np.frombuffer(raw, dtype=dtype).astype(np.float32).reshape((ny, nx))
+                )
     else:
         raw_all = np.fromfile(fpath, dtype=dtype)
-        expected = nvars * nfloats
+        expected = n_fields * nfloats
         if raw_all.size < expected:
             raise ValueError(
-                f"Arquivo {fpath} tem {raw_all.size} valores, esperado >= {expected}"
+                "Arquivo " + fpath + " tem " + str(raw_all.size) +
+                " valores, esperado >= " + str(expected)
             )
-        arrays = [
+        all_raw = [
             raw_all[i * nfloats : (i + 1) * nfloats].reshape((ny, nx))
-            for i in range(nvars)
+            for i in range(n_fields)
         ]
 
     result = {}
-    for i, v in enumerate(config.VARIABLES):
+    for v in config.VARIABLES:
         name = v["name"] if isinstance(v, dict) else v[0]
-        arr = arrays[i].copy()
-        with np.errstate(invalid="ignore"):
-            arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
-        result[name] = arr
+        nlev = int(v.get("nlev", 0) or 0) if isinstance(v, dict) else 0
+        idx  = config.VAR_INDEX[name]   # offset binario correto
+
+        if nlev > 0:
+            # 3D: empilha nlev campos -> (nlev, NY, NX)
+            arrs = []
+            for k in range(nlev):
+                arr = all_raw[idx + k].copy()
+                with np.errstate(invalid="ignore"):
+                    arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
+                arrs.append(arr)
+            result[name] = np.stack(arrs, axis=0)
+        else:
+            # 2D: campo unico -> (NY, NX)
+            arr = all_raw[idx].copy()
+            with np.errstate(invalid="ignore"):
+                arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
+            result[name] = arr
 
     return result
 

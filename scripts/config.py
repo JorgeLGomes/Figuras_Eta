@@ -102,6 +102,7 @@ LOG_DIR = "logs"
 DPI = 120; FIG_EXT = "png"
 COG_COMPRESS = "DEFLATE"; COG_ZLEVEL = 1; COG_PREDICTOR = 2; COG_TILE_SIZE = 512
 VARIABLES = []; VAR_NAMES = []; VAR_DESC = {}; VAR_UNITS = {}; VAR_INDEX = {}
+VAR_NLEV = {}; VAR_NDIM = {}; VAR_LEVELS = {}; VAR_PLOT_LEVELS = {}; NVARS_FIELDS = 0
 PRECIP_VARS = []; PRECIP_SET = set(); CMAP_CONFIG = {}
 _CONFIG_FILE = None; _VARS_FILE = None
 
@@ -144,6 +145,7 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     global DPI, FIG_EXT
     global COG_COMPRESS, COG_ZLEVEL, COG_PREDICTOR, COG_TILE_SIZE
     global VARIABLES, VAR_NAMES, VAR_DESC, VAR_UNITS, VAR_INDEX
+    global VAR_NLEV, VAR_NDIM, VAR_LEVELS, VAR_PLOT_LEVELS, NVARS_FIELDS
     global PRECIP_VARS, PRECIP_SET
     global CMAP_CONFIG
     global _CONFIG_FILE, _VARS_FILE
@@ -227,7 +229,18 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     VAR_NAMES  = [v["name"] for v in VARIABLES]
     VAR_DESC   = {v["name"]: v.get("description", v["name"]) for v in VARIABLES}
     VAR_UNITS  = {v["name"]: v.get("units", "")               for v in VARIABLES}
-    VAR_INDEX  = {v["name"]: i                                   for i, v in enumerate(VARIABLES)}
+    # VAR_INDEX: offset binario de cada variavel no arquivo .bin
+    # Variaveis 2D ocupam 1 campo; 3D ocupam nlev campos consecutivos.
+    _offset = 0
+    VAR_INDEX = {}
+    for _v in VARIABLES:
+        VAR_INDEX[_v["name"]] = _offset
+        _offset += max(int(_v.get("nlev", 0) or 0), 1)
+    NVARS_FIELDS    = _offset   # total de campos binarios no arquivo
+    VAR_NLEV        = {v["name"]: int(v.get("nlev", 0) or 0)        for v in VARIABLES}
+    VAR_NDIM        = {v["name"]: (3 if int(v.get("nlev",0) or 0) > 0 else 2) for v in VARIABLES}
+    VAR_LEVELS      = {v["name"]: list(v.get("levels",      []))     for v in VARIABLES}
+    VAR_PLOT_LEVELS = {v["name"]: list(v.get("plot_levels", []))     for v in VARIABLES}
     PRECIP_VARS = [v["name"] for v in VARIABLES if v.get("precip", False)]
     PRECIP_SET  = set(PRECIP_VARS)
     CMAP_CONFIG = {

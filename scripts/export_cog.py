@@ -210,6 +210,7 @@ def export_field_as_cog(
     cog_dir: str,
     title_extra: str = "",
     overviews: bool = False,
+    level_hpa: int = None,
 ) -> str:
     """
     Exporta um campo 2D como COG GeoTIFF.
@@ -243,9 +244,12 @@ def export_field_as_cog(
     }
     if title_extra:
         meta["title_extra"] = title_extra
+    if level_hpa is not None:
+        meta["level_hpa"] = str(level_hpa)
 
+    lev_str   = f"_{level_hpa}hPa" if level_hpa is not None else ""
     extra_tag = f"_{title_extra.replace(' ', '_').lower()}" if title_extra else ""
-    fname = f"{var_name}_{timestamp.strftime('%Y%m%d%H')}{extra_tag}.tif"
+    fname = f"{var_name}{lev_str}_{timestamp.strftime('%Y%m%d%H')}{extra_tag}.tif"
     fpath = os.path.join(cog_dir, fname)
 
     return write_cog(arr, fpath, metadata=meta, overviews=overviews)
@@ -320,42 +324,81 @@ def export_all_24h_accumulations_as_cog(
 def _worker_cog_timestep(args):
     """
     Worker por TIMESTEP: le o arquivo .bin UMA vez e gera TODOS os COGs
-    das variaveis solicitadas. Paralelismo correto = 1 task por arquivo.
+    das variaveis solicitadas (2D e 3D). Paralelismo correto = 1 task por arquivo.
+
+    - Variaveis 2D: 1 COG por timestep  ({VAR}_{YYYYMMDDHH}.tif)
+    - Variaveis 3D: 1 COG por nivel em plot_levels ({VAR}_{N}hPa_{YYYYMMDDHH}.tif)
 
     args: (data_dir, timestamp, vars_list, cog_dir, sequential, overviews, skip_existing)
     returns: list of (var, timestamp, fpath_or_None, error_or_None)
     """
     _data_dir, _t, _vars, _out_dir, _seq, _ovr, _skip = args
-    results   = []
-    ts_str    = _t.strftime('%Y%m%d%H')
+    results = []
+    ts_str  = _t.strftime('%Y%m%d%H')
 
-    # Identifica quais variaveis precisam ser geradas
-    # _out_dir pode ser dict {var: dir} ou str (retrocompatibilidade)
     def _var_dir(var):
         return _out_dir[var] if isinstance(_out_dir, dict) else _out_dir
 
+    _var_nlev        = getattr(config, "VAR_NLEV",        {})
+    _var_levels      = getattr(config, "VAR_LEVELS",      {})
+    _var_plot_levels = getattr(config, "VAR_PLOT_LEVELS", {})
+
     vars_needed = []
     for var in _vars:
-        fpath = os.path.join(_var_dir(var), f"{var}_{ts_str}.tif")
-        if _skip and os.path.exists(fpath):
-            results.append((var, _t, fpath, None))
+        nlev = _var_nlev.get(var, 0)
+        if nlev > 0:
+            # 3D: verifica se todos os arquivos de plot_levels ja existem
+            plot_lvls = _var_plot_levels.get(var, [])
+            if _skip and plot_lvls and all(
+                os.path.exists(
+                    os.path.join(_var_dir(var), f"{var}_{lev}hPa_{ts_str}.tif")
+                ) for lev in plot_lvls
+            ):
+                for lev in plot_lvls:
+                    fp = os.path.join(_var_dir(var), f"{var}_{lev}hPa_{ts_str}.tif")
+                    results.append((var, _t, fp, None))
+            else:
+                vars_needed.append(var)
         else:
-            vars_needed.append(var)
+            # 2D: arquivo unico por timestep
+            fpath = os.path.join(_var_dir(var), f"{var}_{ts_str}.tif")
+            if _skip and os.path.exists(fpath):
+                results.append((var, _t, fpath, None))
+            else:
+                vars_needed.append(var)
 
     if not vars_needed:
         return results
 
-    # Leitura unica do arquivo para todas as variaveis
+    # Leitura unica do arquivo (fields[var]: (NY,NX) 2D ou (nlev,NY,NX) 3D)
     try:
         fields = reader.read_all_fields(_data_dir, _t, sequential=_seq)
     except Exception as e:
         return results + [(v, _t, None, f"leitura: {e}") for v in vars_needed]
 
-    # Gera COG de cada variavel a partir dos dados ja lidos
     for var in vars_needed:
         try:
-            fpath = export_field_as_cog(fields[var], var, _t, _var_dir(var), overviews=_ovr)
-            results.append((var, _t, fpath, None))
+            nlev = _var_nlev.get(var, 0)
+            if nlev > 0:
+                # 3D: exporta cada nivel de plot_levels individualmente
+                all_lvls  = _var_levels.get(var, [])
+                plot_lvls = _var_plot_levels.get(var, [])
+                data_3d   = fields[var]          # (nlev, NY, NX)
+                for lev in plot_lvls:
+                    if lev not in all_lvls:
+                        results.append((var, _t, None,
+                            f"nivel {lev}hPa ausente em levels {all_lvls}"))
+                        continue
+                    k   = all_lvls.index(lev)
+                    fp  = export_field_as_cog(
+                        data_3d[k], var, _t, _var_dir(var),
+                        level_hpa=lev, overviews=_ovr
+                    )
+                    results.append((var, _t, fp, None))
+            else:
+                # 2D: campo unico
+                fp = export_field_as_cog(fields[var], var, _t, _var_dir(var), overviews=_ovr)
+                results.append((var, _t, fp, None))
         except Exception as e:
             results.append((var, _t, None, str(e)))
 
