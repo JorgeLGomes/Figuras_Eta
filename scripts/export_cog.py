@@ -440,10 +440,30 @@ def export_all_fields_as_cog(
         return {}
 
     if verbose:
+        _var_nlev_g        = getattr(config, "VAR_NLEV",        {})
+        _var_plot_levels_g = getattr(config, "VAR_PLOT_LEVELS", {})
+        # Calcula COGs reais: 3D = len(plot_levels) por var; 2D = 1 por var
+        n_per_ts = 0
+        for _v in vars_to_export:
+            _nl = _var_nlev_g.get(_v, 0)
+            if _nl > 0:
+                _pl = _var_plot_levels_g.get(_v, [])
+                n_per_ts += len(_pl) if _pl else _nl
+            else:
+                n_per_ts += 1
+        n_cogs_total = len(timestamps) * n_per_ts
         print(
-            f"[export_cog] {len(timestamps)} timesteps x {len(vars_to_export)} variaveis"
-            f" = {len(timestamps) * len(vars_to_export)} COGs a gerar | workers={workers}"
+            f"[export_cog] {len(timestamps)} timesteps x {n_per_ts} campos/ts"
+            f" = {n_cogs_total} COGs a gerar | workers={workers}"
         )
+        # Resumo por variavel
+        for _v in vars_to_export:
+            _nl = _var_nlev_g.get(_v, 0)
+            if _nl > 0:
+                _pl = _var_plot_levels_g.get(_v, [])
+                print(f"  [3D] {_v}: nlev={_nl} | plot_levels={_pl}")
+            else:
+                print(f"  [2D] {_v}")
 
     # Estrutura por variavel: cog_base_dir/VARNAME/
     os.makedirs(cog_base_dir, exist_ok=True)
