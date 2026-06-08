@@ -94,7 +94,7 @@ def resolve_run_tag(run_input: str, ref_date: _date = None) -> str:
 RUN_TAG = ""; T0 = None; NTIMES = 0; DT_HOURS = 1; TIMESTAMPS = []
 NX = 0; NY = 0; LON0 = 0.0; LAT0 = 0.0; DLON = 0.03; DLAT = 0.03
 LONS = []; LATS = []
-UNDEF = 1e20; DTYPE = ">f4"; FILE_PREFIX = ""; FILE_SUFFIX = ".bin"
+UNDEF = 1e20; DTYPE = ">f4"; FILE_PREFIX = ""; FILE_SUFFIX = ".bin"; FILE_TIMESTAMP_FMT = "%Y%m%d%H"
 SISMOM_DATA_BASE = ""; DATA_DIR = ""; DATA_DIR_TEMPLATE = ""
 # DATA_DIR_TEMPLATE aceita: {data}/{run_tag} = YYYYMMDDHH, {yyyy}, {mm}, {dd}, {hh}
 OUTPUT_DIR = "saida"
@@ -104,6 +104,21 @@ COG_COMPRESS = "DEFLATE"; COG_ZLEVEL = 1; COG_PREDICTOR = 2; COG_TILE_SIZE = 512
 VARIABLES = []; VAR_NAMES = []; VAR_DESC = {}; VAR_UNITS = {}; VAR_INDEX = {}
 PRECIP_VARS = []; PRECIP_SET = set(); CMAP_CONFIG = {}
 _CONFIG_FILE = None; _VARS_FILE = None
+
+
+def _template_to_strftime(template: str) -> str:
+    """Converte placeholders {yyyy}{mm}{dd}{hh} para formato strftime.
+
+    Exemplos:
+      {yyyy}{mm}{dd}{hh}  ->  %Y%m%d%H   (10 chars, padrao 2D)
+      {yyyy}{dd}{hh}      ->  %Y%d%H     (8 chars, 3D sem mes)
+      {yyyy}{mm}{dd}      ->  %Y%m%d     (8 chars, sem hora)
+    """
+    return (template
+            .replace("{yyyy}", "%Y")
+            .replace("{mm}",   "%m")
+            .replace("{dd}",   "%d")
+            .replace("{hh}",   "%H"))
 
 
 def init_config(config_file=None, vars_file=None, run_tag=None):
@@ -123,7 +138,7 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     """
     global RUN_TAG, T0, NTIMES, DT_HOURS, TIMESTAMPS
     global NX, NY, LON0, LAT0, DLON, DLAT, LONS, LATS
-    global UNDEF, DTYPE, FILE_PREFIX, FILE_SUFFIX
+    global UNDEF, DTYPE, FILE_PREFIX, FILE_SUFFIX, FILE_TIMESTAMP_FMT
     global SISMOM_DATA_BASE, DATA_DIR, DATA_DIR_TEMPLATE
     global OUTPUT_DIR, LOG_DIR
     global DPI, FIG_EXT
@@ -179,8 +194,13 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     m           = cfg["model"]
     UNDEF       = float(m["undef"])
     DTYPE       = str(m["dtype"])
-    FILE_PREFIX = str(m["file_prefix"]).replace("{run_tag}", RUN_TAG)  # usa RUN_TAG ja resolvido
-    FILE_SUFFIX = str(m["file_suffix"])
+    FILE_PREFIX        = str(m["file_prefix"]).replace("{run_tag}", RUN_TAG)
+    FILE_SUFFIX        = str(m["file_suffix"])
+    _ts_tpl            = str(m.get("file_timestamp", "{yyyy}{mm}{dd}{hh}"))
+    FILE_TIMESTAMP_FMT = _template_to_strftime(_ts_tpl)
+    # file_timestamp no config.yaml define a parte variavel do nome do arquivo:
+    #   {yyyy}{mm}{dd}{hh}  ->  2026060600  (padrao 2D, 10 chars)
+    #   {yyyy}{dd}{hh}      ->  20260600    (3D sem mes, 8 chars)
 
     # ── Caminhos ───────────────────────────────────────────────────────
     p    = cfg["paths"]

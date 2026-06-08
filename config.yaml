@@ -30,6 +30,13 @@ model:
   dtype: ">f4"               # tipo numpy: ">f4" big-endian, "<f4" little-endian
   file_prefix: "Eta03_BESM_{run_tag}+"   # {run_tag} e substituido automaticamente
   file_suffix: "_2D.bin"
+  # Formato da parte variavel do nome do arquivo (timestamp do passo de tempo).
+  # Placeholders: {yyyy}=ano, {mm}=mes, {dd}=dia, {hh}=hora UTC
+  # Exemplos:
+  #   {yyyy}{mm}{dd}{hh}  ->  2026060600  (YYYYMMDDHH, 10 chars) [padrao]
+  #   {yyyy}{dd}{hh}      ->  20260600    (YYYYddhh,   8 chars)  [3D sem mes]
+  #   {yyyy}{mm}{dd}      ->  20260606    (YYYYMMDD,   8 chars)  [sem hora]
+  file_timestamp: "{yyyy}{mm}{dd}{hh}"
 
 # ── Caminhos de dados e saida ─────────────────────────────────────────────────
 paths:

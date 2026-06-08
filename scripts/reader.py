@@ -28,10 +28,24 @@ def _build_filename(data_dir: str, timestamp: datetime, fmt: str = "%Y%m%d%H") -
 
 def _resolve_filename(data_dir: str, timestamp: datetime):
     """
-    Tenta multiplos formatos de timestamp para localizar o arquivo .bin.
+    Localiza o arquivo .bin para um dado timestamp.
+
+    Estrategia:
+      1. Usa config.FILE_TIMESTAMP_FMT (definido por file_timestamp no config.yaml)
+      2. Fallback: tenta todos os formatos em _TIMESTAMP_FORMATS
     Retorna o caminho completo se encontrado, ou None.
     """
+    # Primário: formato declarado explicitamente no config.yaml
+    primary_fmt = getattr(config, "FILE_TIMESTAMP_FMT", "")
+    if primary_fmt:
+        fpath = _build_filename(data_dir, timestamp, primary_fmt)
+        if os.path.exists(fpath):
+            return fpath
+
+    # Fallback: tenta formatos alternativos (backward compat / auto-deteccao)
     for fmt in _TIMESTAMP_FORMATS:
+        if fmt == primary_fmt:
+            continue  # ja tentado acima
         fpath = _build_filename(data_dir, timestamp, fmt)
         if os.path.exists(fpath):
             return fpath
