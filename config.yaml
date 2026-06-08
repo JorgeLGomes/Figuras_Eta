@@ -37,7 +37,7 @@ paths:
   # Caminho completo: <data_base>/<run_tag>/regional/eta/2D/
   # Deixe vazio ("") para usar a variavel de ambiente SISMOM_DATA_BASE
   # ou o diretorio local data/ do projeto.
-  data_base: ""
+  data_base: "/dados/sismom/SisMOM/sismom_forecast"
 
   output_dir: "/dados/sismom/SisMOM/sismom_fig/Figuras_Eta/saida"  # base de saida (caminho completo recomendado)
                                       # png/{run_tag}/{var[_ACUMNNh]}/ -- figuras PNG
