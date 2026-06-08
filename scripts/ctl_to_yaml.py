@@ -134,6 +134,50 @@ _UNIT_CMAP = {
 }
 
 
+# Tabela de metadados para variaveis 3D (NLEV > 0 no CTL / dim vertical no NetCDF)
+# plot_levels: niveis de pressao (hPa) plotados por padrao
+_VAR3D_META = {
+    # Temperatura
+    "T":       dict(cmap="RdBu_r",  vmin=210,   vmax=310,   precip=False, plot_levels=[850, 700, 500, 300, 250, 200]),
+    "TEMP":    dict(cmap="RdBu_r",  vmin=210,   vmax=310,   precip=False, plot_levels=[850, 700, 500, 300, 250, 200]),
+    "TMP":     dict(cmap="RdBu_r",  vmin=210,   vmax=310,   precip=False, plot_levels=[850, 700, 500, 300, 250, 200]),
+    "TH":      dict(cmap="RdBu_r",  vmin=270,   vmax=500,   precip=False, plot_levels=[500, 300]),
+    "THE":     dict(cmap="hot_r",   vmin=320,   vmax=380,   precip=False, plot_levels=[850, 700]),
+    "THTE":    dict(cmap="hot_r",   vmin=320,   vmax=380,   precip=False, plot_levels=[850, 700]),
+    # Vento
+    "U":       dict(cmap="bwr",     vmin=-50,   vmax=50,    precip=False, plot_levels=[850, 500, 250, 200]),
+    "V":       dict(cmap="bwr",     vmin=-50,   vmax=50,    precip=False, plot_levels=[850, 500, 250, 200]),
+    "UWND":    dict(cmap="bwr",     vmin=-50,   vmax=50,    precip=False, plot_levels=[850, 500, 250]),
+    "VWND":    dict(cmap="bwr",     vmin=-50,   vmax=50,    precip=False, plot_levels=[850, 500, 250]),
+    "W":       dict(cmap="bwr",     vmin=-5,    vmax=5,     precip=False, plot_levels=[500]),
+    "OMEGA":   dict(cmap="bwr",     vmin=-2,    vmax=2,     precip=False, plot_levels=[700, 500, 300]),
+    "VV":      dict(cmap="bwr",     vmin=-2,    vmax=2,     precip=False, plot_levels=[500, 300]),
+    # Altura geopotencial
+    "Z":       dict(cmap="viridis", vmin=None,  vmax=None,  precip=False, plot_levels=[850, 500, 250]),
+    "HGT":     dict(cmap="viridis", vmin=None,  vmax=None,  precip=False, plot_levels=[850, 500, 250]),
+    "GH":      dict(cmap="viridis", vmin=None,  vmax=None,  precip=False, plot_levels=[850, 500, 250]),
+    "GP":      dict(cmap="viridis", vmin=None,  vmax=None,  precip=False, plot_levels=[500, 250]),
+    "GEOPOT":  dict(cmap="viridis", vmin=None,  vmax=None,  precip=False, plot_levels=[500]),
+    # Umidade
+    "Q":       dict(cmap="YlGnBu",  vmin=0,     vmax=0.022, precip=False, plot_levels=[850, 700]),
+    "QV":      dict(cmap="YlGnBu",  vmin=0,     vmax=0.022, precip=False, plot_levels=[850, 700]),
+    "SPFH":    dict(cmap="YlGnBu",  vmin=0,     vmax=0.022, precip=False, plot_levels=[850, 700]),
+    "QC":      dict(cmap="Blues",   vmin=0,     vmax=0.001, precip=False, plot_levels=[500]),
+    "QI":      dict(cmap="Purples", vmin=0,     vmax=0.001, precip=False, plot_levels=[300, 200]),
+    "RH":      dict(cmap="YlGnBu",  vmin=0,     vmax=100,   precip=False, plot_levels=[850, 700, 500]),
+    "RHUM":    dict(cmap="YlGnBu",  vmin=0,     vmax=100,   precip=False, plot_levels=[850, 700]),
+    # Pressao / sigma
+    "P":       dict(cmap="RdBu_r",  vmin=None,  vmax=None,  precip=False, plot_levels=[]),
+    "PRES":    dict(cmap="RdBu_r",  vmin=None,  vmax=None,  precip=False, plot_levels=[]),
+    # Nuvens
+    "CFRAC":   dict(cmap="Greys",   vmin=0,     vmax=1,     precip=False, plot_levels=[500]),
+    "CLDF3D":  dict(cmap="Greys",   vmin=0,     vmax=1,     precip=False, plot_levels=[500]),
+    # Turbulencia
+    "TKE":     dict(cmap="hot_r",   vmin=0,     vmax=5,     precip=False, plot_levels=[925, 850]),
+    "KM":      dict(cmap="hot_r",   vmin=0,     vmax=100,   precip=False, plot_levels=[925]),
+}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PARSER DO CTL
 # ─────────────────────────────────────────────────────────────────────────────
@@ -233,12 +277,14 @@ def _infer_dtype(options: list[str]) -> str:
     return ">f4"      # big-endian (padrao GrADS)
 
 
-def _infer_var_meta(name: str, units: str, description: str) -> dict:
+def _infer_var_meta(name: str, units: str, description: str, nlev: int = 0) -> dict:
     """
-    Retorna dict com cmap, vmin, vmax, precip para uma variavel.
-    Prioridade: tabela por nome > inferencia por unidade > defaults.
+    Retorna dict com cmap, vmin, vmax, precip (e plot_levels para 3D).
+    Prioridade: tabela 3D (nlev>0) > tabela 2D > inferencia por unidade > defaults.
     """
     key = name.upper()
+    if nlev > 0 and key in _VAR3D_META:
+        return dict(_VAR3D_META[key])
     if key in _VAR_META:
         return dict(_VAR_META[key])
 
@@ -270,8 +316,12 @@ def _parse_vars_line(line: str) -> dict | None:
         return None
 
     name = parts[0]
-    # nlev pode ser numero ou string de opcoes
+    # nlev: 0 = variavel 2D (superficie); >0 = variavel 3D com N niveis verticais
     nlev_str = parts[1] if len(parts) > 1 else "0"
+    try:
+        nlev = int(nlev_str)
+    except ValueError:
+        nlev = 0
     units_raw = parts[2] if len(parts) > 2 else ""
     description = parts[3].strip() if len(parts) > 3 else ""
 
@@ -291,7 +341,7 @@ def _parse_vars_line(line: str) -> dict | None:
     else:
         units = units_raw
 
-    return dict(name=name, units=units, description=description or name)
+    return dict(name=name, nlev=nlev, units=units, description=description or name)
 
 
 def parse_ctl(path: str) -> dict:
@@ -318,12 +368,16 @@ def parse_ctl(path: str) -> dict:
         "file_prefix": "", "file_suffix": "",
         "title": "",
         "variables": [],
+        "zdef": {"nz": 1, "levels": []},
     }
 
     lines = ctl.read_text(encoding="utf-8", errors="replace").splitlines()
 
     in_vars = False
     n_vars_expected = 0
+    in_zdef = False
+    zdef_nz = 0
+    zdef_values = []
 
     for raw_line in lines:
         line = raw_line.strip()
@@ -390,6 +444,42 @@ def parse_ctl(path: str) -> dict:
                     result["dt_hours"] = 1
             continue
 
+        # ZDEF  NZ  {LINEAR z0 dz | LEVELS z1 z2 ...} (pode ser multi-linha)
+        if in_zdef:
+            for tok in line.split():
+                try:
+                    zdef_values.append(float(tok))
+                except ValueError:
+                    pass
+            if len(zdef_values) >= zdef_nz:
+                in_zdef = False
+                result["zdef"]["levels"] = zdef_values[:zdef_nz]
+            continue
+
+        if upper.startswith("ZDEF"):
+            parts_z = line.split()
+            if len(parts_z) >= 2:
+                try:
+                    zdef_nz = int(parts_z[1])
+                except ValueError:
+                    zdef_nz = 1
+                result["zdef"]["nz"] = zdef_nz
+                if len(parts_z) > 2 and parts_z[2].upper() == "LINEAR" and len(parts_z) >= 5:
+                    z0 = float(parts_z[3])
+                    dz = float(parts_z[4])
+                    result["zdef"]["levels"] = [round(z0 + i * dz, 6) for i in range(zdef_nz)]
+                elif len(parts_z) > 2 and parts_z[2].upper() == "LEVELS":
+                    inline = []
+                    for tok in parts_z[3:]:
+                        try: inline.append(float(tok))
+                        except ValueError: pass
+                    zdef_values = inline
+                    if len(inline) >= zdef_nz:
+                        result["zdef"]["levels"] = inline[:zdef_nz]
+                    else:
+                        in_zdef = True
+            continue
+
         # VARS  N
         if upper.startswith("VARS") and not in_vars:
             try:
@@ -415,9 +505,21 @@ def parse_ctl(path: str) -> dict:
     result["file_suffix"] = suffix
 
     # Adiciona metadados inferidos a cada variavel
+    zlevels = result["zdef"].get("levels", [])
     for v in result["variables"]:
-        meta = _infer_var_meta(v["name"], v.get("units", ""), v.get("description", ""))
+        nlev_v = v.get("nlev", 0)
+        meta = _infer_var_meta(v["name"], v.get("units", ""), v.get("description", ""), nlev=nlev_v)
         v.update(meta)
+        if nlev_v > 0:
+            v["ndim"] = 3
+            v["levels"] = list(zlevels) if zlevels else []
+            pl = v.get("plot_levels", [])
+            if pl and zlevels:
+                v["plot_levels"] = [p for p in pl if any(abs(p - z) < 1.0 for z in zlevels)] or list(zlevels[:6])
+            elif not pl and zlevels:
+                v["plot_levels"] = list(zlevels[:6])
+        else:
+            v["ndim"] = 2
 
     return result
 
@@ -544,6 +646,21 @@ def generate_variables_yaml(ctl: dict) -> str:
         lines.append(f"    vmax: {vmax}")
         lines.append(f"    precip: {prec}")
         lines.append(f"    enabled: {enab}")
+        if v.get("ndim") == 3:
+            nlev_v = v.get("nlev", 0)
+            lev_v  = v.get("levels", [])
+            pl_v   = v.get("plot_levels", [])
+            lines.append(f"    ndim: 3")
+            lines.append(f"    nlev: {nlev_v}")
+            if lev_v:
+                lev_fmt = "[" + ", ".join(
+                    str(int(x)) if x == int(x) else str(round(x, 4))
+                    for x in lev_v) + "]"
+                lines.append(f"    levels: {lev_fmt}")
+            else:
+                lines.append("    levels: []   # preencha com os niveis do modelo")
+            pl_fmt = "[" + ", ".join(str(int(p)) for p in pl_v) + "]" if pl_v else "[]"
+            lines.append(f"    plot_levels: {pl_fmt}")
         lines.append("")
 
     return "\n".join(lines)
@@ -562,6 +679,9 @@ _LON_CANDIDATES  = ["lon", "longitude", "XLONG", "nav_lon", "x", "lon_rho",
 _LAT_CANDIDATES  = ["lat", "latitude",  "XLAT",  "nav_lat", "y", "lat_rho",
                     "Latitude",  "LAT", "lats", "lat_0"]
 _TIME_CANDIDATES = ["time", "Time", "TIME", "t", "T", "times", "time0"]
+_LEV_CANDIDATES  = ["level", "pressure", "lev", "plev", "sigma", "hybrid",
+                    "eta", "height", "z", "depth", "isobaric", "pres",
+                    "pfull", "phalf", "lev_p", "vertical", "Layer"]
 
 
 def _detect_format(path: str) -> str:
@@ -759,6 +879,7 @@ def parse_netcdf(path: str) -> dict:
         lon_name  = _nc_find_coord(ds, _LON_CANDIDATES,  cf_axis="X", cf_standard="longitude")
         lat_name  = _nc_find_coord(ds, _LAT_CANDIDATES,  cf_axis="Y", cf_standard="latitude")
         time_name = _nc_find_coord(ds, _TIME_CANDIDATES, cf_axis="T", cf_standard="time")
+        lev_name  = _nc_find_coord(ds, _LEV_CANDIDATES,  cf_axis="Z", cf_standard="pressure")
 
         if lon_name is None or lat_name is None:
             result["_warnings"].append(
@@ -793,8 +914,15 @@ def parse_netcdf(path: str) -> dict:
         lon_dims  = set(ds.variables[lon_name].dimensions)  if lon_name  else set()
         lat_dims  = set(ds.variables[lat_name].dimensions)  if lat_name  else set()
         time_dims = set(ds.variables[time_name].dimensions) if time_name else set()
-        spatial_dims = lon_dims | lat_dims   # dimensoes que identificam variavel 2D
-        coord_names  = {n for n in [lon_name, lat_name, time_name] if n}
+        lev_dims  = set(ds.variables[lev_name].dimensions)  if lev_name  else set()
+        spatial_dims = lon_dims | lat_dims
+        coord_names  = {n for n in [lon_name, lat_name, time_name, lev_name] if n}
+        if lev_name:
+            import numpy as _np2
+            _lev_raw = _np2.array(ds.variables[lev_name][:], dtype=float).ravel()
+            zlevels_nc = sorted(float(x) for x in _lev_raw)
+        else:
+            zlevels_nc = []
 
         # Variaveis a ignorar (dimensoes, coordenadas, metadados comuns)
         _skip = coord_names | set(getattr(ds, "dimensions", {}).keys())
@@ -843,13 +971,22 @@ def parse_netcdf(path: str) -> dict:
             if result["dtype"] == ">f4":
                 result["dtype"] = _nc_dtype(var)
 
-            meta = _infer_var_meta(varname, units, str(long_name))
-            result["variables"].append(dict(
+            is_3d   = bool(lev_name and lev_name in set(var.dimensions))
+            nlev_nc = len(zlevels_nc) if is_3d else 0
+            meta    = _infer_var_meta(varname, units, str(long_name), nlev=nlev_nc)
+            entry   = dict(
                 name=varname,
                 description=str(long_name).strip(),
                 units=units,
+                nlev=nlev_nc,
+                ndim=3 if is_3d else 2,
                 **meta,
-            ))
+            )
+            if is_3d:
+                entry["levels"] = list(zlevels_nc)
+                pl = entry.get("plot_levels", [])
+                entry["plot_levels"] = pl if pl else [int(x) for x in zlevels_nc[:6]]
+            result["variables"].append(entry)
 
         if undef_found is not None:
             result["undef"] = undef_found
@@ -907,14 +1044,20 @@ def _print_summary(data: dict, source: str, fmt: str):
     print(f"  dtype    : {data['dtype']}  |  undef={data['undef']:.3e}")
     if fmt == "ctl":
         print(f"  SEQUENTIAL: {data['sequential']}")
-    print(f"  Variaveis: {len(data['variables'])}")
+    n2d = sum(1 for v in data["variables"] if v.get("ndim", 2) == 2)
+    n3d = sum(1 for v in data["variables"] if v.get("ndim", 2) == 3)
+    if n3d:
+        print(f"  Variaveis: {len(data['variables'])} ({n2d} 2D + {n3d} 3D)")
+    else:
+        print(f"  Variaveis: {len(data['variables'])}")
     if data["variables"]:
         names = [v["name"] for v in data["variables"]]
         preview = ", ".join(names[:12])
         if len(names) > 12:
             preview += f", ... (+{len(names)-12})"
         print(f"             {preview}")
-    known = sum(1 for v in data["variables"] if v["name"].upper() in _VAR_META)
+    known = sum(1 for v in data["variables"]
+                if v["name"].upper() in _VAR_META or v["name"].upper() in _VAR3D_META)
     if data["variables"]:
         unk = len(data["variables"]) - known
         print(f"  Colormaps: {known}/{len(data['variables'])} da tabela interna"
@@ -976,16 +1119,18 @@ def main():
     # Modo --list-vars: lista variaveis e sai
     if args.list_vars:
         print(f"\nVariaveis em '{pathlib.Path(args.input).name}' ({len(data['variables'])} total):\n")
-        fmt_row = "{:<12} {:<10} {:<12} {:>8} {:>8}  {}"
-        print(fmt_row.format("Nome", "Cmap", "Unidade", "vmin", "vmax", "Descricao"))
+        fmt_row = "{:<12} {:<4} {:<10} {:<12} {:>8} {:>8}  {}"
+        print(fmt_row.format("Nome", "Dim", "Cmap", "Unidade", "vmin", "vmax", "Descricao"))
         print("-" * 78)
         for v in data["variables"]:
             vmin = str(v.get("vmin", "~")) if v.get("vmin") is not None else "~"
             vmax = str(v.get("vmax", "~")) if v.get("vmax") is not None else "~"
             vmin = str(v.get("vmin")) if v.get("vmin") is not None else "~"
             vmax = str(v.get("vmax")) if v.get("vmax") is not None else "~"
+            ndim_s = "3D" if v.get("ndim") == 3 else "2D"
             print(fmt_row.format(
                 v["name"][:12],
+                ndim_s,
                 v.get("cmap", "viridis")[:10],
                 str(v.get("units", ""))[:12],
                 vmin[:8], vmax[:8],
