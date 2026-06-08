@@ -258,6 +258,27 @@ def _dset_to_prefix_suffix(dset: str) -> tuple:
                 last_end = end
 
     if not has_template:
+        # Sem tokens GrADS. Tenta detectar timestamp embutido no nome do arquivo.
+        # Padrao 1: run_tag(10) + sep(0-1) + valid(10) ex: Eta03_BESM_2026060600+2026060600_2D.bin
+        # Padrao 2: run_tag(10) + valid(8)             ex: Eta03_BESM_202606060020260600_3D.bin
+        stem = dset.rsplit(".", 1)[0] if "." in dset else dset
+        ext  = ("." + dset.rsplit(".", 1)[1]) if "." in dset else ""
+
+        # Caso 1: 10d + separador(0-1) + 10d
+        m10 = re.search(r"(\d{10})([\+\-_]?)(\d{10})", stem)
+        if m10:
+            pre_stem = stem[:m10.start()] + "{run_tag}" + m10.group(2)
+            suf_stem = stem[m10.end():]
+            return pre_stem, suf_stem + ext, True, "{yyyy}{mm}{dd}{hh}"
+
+        # Caso 2: 10d + 8d sem separador
+        m18 = re.search(r"(\d{10})(\d{8})", stem)
+        if m18:
+            pre_stem = stem[:m18.start()] + "{run_tag}"
+            suf_stem = stem[m18.end():]
+            return pre_stem, suf_stem + ext, True, "{yyyy}{dd}{hh}"
+
+        # Fallback: arquivo unico sem template identificavel
         return dset, "", False, "{yyyy}{mm}{dd}{hh}"
 
     raw_prefix     = dset[:first_pos]
@@ -611,7 +632,10 @@ def generate_config_yaml(ctl: dict) -> str:
     lines.append("# " + "─" * 77)
     lines.append("")
     lines.append("run:")
-    lines.append(f"  ntimes: {ctl['ntimes']}          # numero de passos de tempo (inclui analise = 0)")
+    ntimes_comment = "# numero de passos de tempo (inclui analise = 0)"
+    if ctl.get("ntimes", 1) == 1 and ctl.get("file_prefix", ""):
+        ntimes_comment += "  !! CTL de timestep unico; ajuste para o total da rodada"
+    lines.append(f"  ntimes: {ctl['ntimes']}          {ntimes_comment}")
     lines.append(f"  dt_hours: {ctl['dt_hours']}       # intervalo de saida do modelo em horas")
     lines.append("")
     lines.append("grid:")
