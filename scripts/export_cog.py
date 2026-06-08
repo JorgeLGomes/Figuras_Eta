@@ -370,33 +370,58 @@ def _worker_cog_timestep(args):
     if not vars_needed:
         return results
 
-    # Leitura unica do arquivo (fields[var]: (NY,NX) 2D ou (nlev,NY,NX) 3D)
+    # Monta mapa {var: None (2D) | [k0,k1,...] (indices dos niveis 3D a ler)}
+    # Usa read_fields_selective: le SOMENTE os niveis de plot_levels (nao todos).
+    var_level_map = {}
+    level_k_map   = {}   # {var: {lev_hpa: k}} para montar fpath depois
+    for var in vars_needed:
+        nlev = _var_nlev.get(var, 0)
+        if nlev > 0:
+            all_lvls  = _var_levels.get(var, [])
+            plot_lvls = _var_plot_levels.get(var, [])
+            ks = []
+            lk = {}
+            for lev in plot_lvls:
+                if lev in all_lvls:
+                    k = all_lvls.index(lev)
+                    ks.append(k)
+                    lk[lev] = k
+            var_level_map[var] = ks if ks else None
+            level_k_map[var]   = lk
+        else:
+            var_level_map[var] = None
+
     try:
-        fields = reader.read_all_fields(_data_dir, _t, sequential=_seq)
+        fields = reader.read_fields_selective(
+            _data_dir, _t, var_level_map, sequential=_seq
+        )
     except Exception as e:
-        return results + [(v, _t, None, f"leitura: {e}") for v in vars_needed]
+        return results + [(v, _t, None, "leitura: " + str(e)) for v in vars_needed]
 
     for var in vars_needed:
         try:
             nlev = _var_nlev.get(var, 0)
             if nlev > 0:
-                # 3D: exporta cada nivel de plot_levels individualmente
-                all_lvls  = _var_levels.get(var, [])
+                # 3D: fields[var] = {k: arr(NY,NX)}
+                lk        = level_k_map.get(var, {})
                 plot_lvls = _var_plot_levels.get(var, [])
-                data_3d   = fields[var]          # (nlev, NY, NX)
+                all_lvls  = _var_levels.get(var, [])
+                lev_data  = fields.get(var, {})
                 for lev in plot_lvls:
                     if lev not in all_lvls:
                         results.append((var, _t, None,
-                            f"nivel {lev}hPa ausente em levels {all_lvls}"))
+                            "nivel " + str(lev) + "hPa ausente em levels " + str(all_lvls)))
                         continue
-                    k   = all_lvls.index(lev)
-                    fp  = export_field_as_cog(
-                        data_3d[k], var, _t, _var_dir(var),
+                    k = lk.get(lev)
+                    if k is None or k not in lev_data:
+                        continue
+                    fp = export_field_as_cog(
+                        lev_data[k], var, _t, _var_dir(var),
                         level_hpa=lev, overviews=_ovr
                     )
                     results.append((var, _t, fp, None))
             else:
-                # 2D: campo unico
+                # 2D: fields[var] = arr(NY,NX)
                 fp = export_field_as_cog(fields[var], var, _t, _var_dir(var), overviews=_ovr)
                 results.append((var, _t, fp, None))
         except Exception as e:

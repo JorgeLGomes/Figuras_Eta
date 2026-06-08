@@ -206,3 +206,98 @@ def file_exists(data_dir: str, timestamp: datetime) -> bool:
 def list_available_timestamps(data_dir: str) -> list:
     """Retorna lista de timestamps para os quais existem arquivos .bin."""
     return [t for t in config.TIMESTAMPS if file_exists(data_dir, t)]
+
+
+def read_fields_selective(
+    data_dir: str,
+    timestamp: datetime,
+    var_level_map: dict,
+    sequential: bool = False,
+    dtype: str = None,
+) -> dict:
+    """
+    Le apenas os campos especificos solicitados (minimo uso de memoria).
+
+    Ao inves de ler todos os nlev niveis de cada variavel 3D, le apenas os
+    niveis necessarios para gerar as figuras (plot_levels).
+
+    Parameters
+    ----------
+    var_level_map : dict
+        {var_name: None}           -> variavel 2D: le 1 campo
+        {var_name: [k0, k1, ...]}  -> variavel 3D: le apenas esses indices de nivel
+
+    Returns
+    -------
+    dict:
+        {var_name: np.ndarray(NY, NX)}       para vars 2D
+        {var_name: {k: np.ndarray(NY, NX)}}  para vars 3D (k = indice do nivel)
+    """
+    fpath = _resolve_filename(data_dir, timestamp)
+    if fpath is None:
+        tag = timestamp.strftime("%Y%m%d%H")
+        raise FileNotFoundError(
+            "Arquivo nao encontrado para " + tag + " em '" + data_dir + "' "
+            "(prefixo=" + repr(config.FILE_PREFIX) + ", sufixo=" + repr(config.FILE_SUFFIX) + ")"
+        )
+
+    dtype   = dtype or config.DTYPE
+    nx, ny  = config.NX, config.NY
+    nfloats = nx * ny
+    nbytes  = nfloats * 4
+
+    def _clean(arr):
+        arr = arr.astype(np.float32).reshape(ny, nx).copy()
+        with np.errstate(invalid="ignore"):
+            arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
+        return arr
+
+    result = {}
+
+    if sequential:
+        # Formato Fortran: percorre registros sequencialmente e descarta os desnecessarios.
+        # Monta conjunto de field_indices necessarios.
+        needed = {}
+        for var, level_ks in var_level_map.items():
+            base = config.VAR_INDEX[var]
+            if level_ks is None:
+                needed[base] = (var, None)
+            else:
+                for k in level_ks:
+                    needed[base + k] = (var, k)
+
+        n_fields = getattr(config, "NVARS_FIELDS", len(config.VARIABLES))
+        tmp = {}
+        with open(fpath, "rb") as f:
+            for fi in range(n_fields):
+                rec_len = int(np.frombuffer(f.read(4), dtype=">u4")[0])
+                raw     = f.read(rec_len)
+                f.read(4)
+                if fi in needed:
+                    var, lev_k = needed[fi]
+                    arr = _clean(np.frombuffer(raw, dtype=dtype))
+                    if lev_k is None:
+                        tmp[var] = arr
+                    else:
+                        tmp.setdefault(var, {})[lev_k] = arr
+        result = tmp
+    else:
+        # Formato stream: seek direto a cada campo necessario (sem carregar o arquivo inteiro).
+        with open(fpath, "rb") as f:
+            for var, level_ks in var_level_map.items():
+                base = config.VAR_INDEX[var]
+                if level_ks is None:
+                    # 2D: 1 campo
+                    f.seek(base * nbytes)
+                    raw = f.read(nbytes)
+                    result[var] = _clean(np.frombuffer(raw, dtype=dtype))
+                else:
+                    # 3D: apenas os niveis solicitados
+                    lev_dict = {}
+                    for k in level_ks:
+                        f.seek((base + k) * nbytes)
+                        raw = f.read(nbytes)
+                        lev_dict[k] = _clean(np.frombuffer(raw, dtype=dtype))
+                    result[var] = lev_dict
+
+    return result
