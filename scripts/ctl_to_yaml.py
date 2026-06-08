@@ -630,7 +630,7 @@ def generate_config_yaml(ctl: dict) -> str:
     # file_timestamp: placeholders da parte variavel do nome ({yyyy}{mm}{dd}{hh})
     _ts_tpl = ctl.get("file_timestamp", "{yyyy}{mm}{dd}{hh}")
     lines.append(f'  # Formato da parte variavel do nome do arquivo (timestamp do passo).')
-    lines.append(f'  # {yyyy}=ano {mm}=mes {dd}=dia {hh}=hora. Omita {mm} se o arquivo 3D usar YYYYddhh.')
+    lines.append('  # {yyyy}=ano {mm}=mes {dd}=dia {hh}=hora. Omita {mm} se o arquivo 3D usar YYYYddhh.')
     lines.append(f'  file_timestamp: "{_ts_tpl}"')
     lines.append(f'  sequential: {str(ctl["sequential"]).lower()}   # OPTIONS SEQUENTIAL no CTL')
     lines.append("")
