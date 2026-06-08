@@ -33,11 +33,12 @@ model:
 
 # ── Caminhos de dados e saida ─────────────────────────────────────────────────
 paths:
-  # Base dos dados no servidor SisMOM.
-  # Caminho completo: <data_base>/<run_tag>/regional/eta/2D/
-  # Deixe vazio ("") para usar a variavel de ambiente SISMOM_DATA_BASE
-  # ou o diretorio local data/ do projeto.
-  data_base: "/dados/sismom/SisMOM/sismom_forecast"
+  # Template do caminho dos dados do modelo.
+  # Variaveis: {data}/{run_tag} = YYYYMMDDHH, {yyyy}, {mm}, {dd}, {hh}
+  # Exemplos:
+  #   /dados/sismom/SisMOM/sismom_forecast/{data}/regional/eta/2D
+  #   /dados/sismom/SisMOM/sismom_forecast/{yyyy}{mm}{dd}{hh}/regional/eta/2D
+  data_dir: "/dados/sismom/SisMOM/sismom_forecast/{data}/regional/eta/2D"
 
   output_dir: "/dados/sismom/SisMOM/sismom_fig/Figuras_Eta/saida"  # base de saida (caminho completo recomendado)
                                       # png/{run_tag}/{var[_ACUMNNh]}/ -- figuras PNG

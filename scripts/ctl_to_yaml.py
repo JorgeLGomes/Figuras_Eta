@@ -540,6 +540,39 @@ def _fmt_float(v) -> str:
     return str(v)
 
 
+
+def _path_to_data_dir_template(source_path: str) -> str:
+    """
+    Deriva um template de data_dir a partir do caminho completo do arquivo CTL/NetCDF.
+
+    Substitui a primeira ocorrencia de run_tag (10 digitos = YYYYMMDDHH) por {data}.
+    Se nao encontrar run_tag de 10 digitos, tenta data de 8 digitos (YYYYMMDD).
+
+    Exemplos
+    --------
+    /dados/sismom_forecast/2026060600/regional/eta/2D/arquivo.ctl
+      -> /dados/sismom_forecast/{data}/regional/eta/2D
+
+    /dados/sismom_forecast/2026060600/regional/eta/3D/arquivo.nc
+      -> /dados/sismom_forecast/{data}/regional/eta/3D
+
+    /dados/rodadas/20260606/eta/arquivo.nc
+      -> /dados/rodadas/{yyyy}{mm}{dd}/eta
+    """
+    if not source_path:
+        return ""
+    directory = str(pathlib.Path(source_path).parent)
+    # Tenta run_tag de 10 digitos (YYYYMMDDHH)
+    m = re.search(r'(\d{10})', directory)
+    if m:
+        return directory[:m.start()] + '{data}' + directory[m.end():]
+    # Tenta data de 8 digitos (YYYYMMDD)
+    m = re.search(r'(\d{8})', directory)
+    if m:
+        return directory[:m.start()] + '{yyyy}{mm}{dd}' + directory[m.end():]
+    return directory
+
+
 def generate_config_yaml(ctl: dict) -> str:
     """Gera o conteudo de config.yaml a partir do resultado do parse_ctl."""
     undef_str = f"{ctl['undef']:.3e}" if abs(ctl['undef']) >= 1e6 else str(ctl['undef'])
@@ -586,13 +619,13 @@ def generate_config_yaml(ctl: dict) -> str:
     lines.append(f'  sequential: {str(ctl["sequential"]).lower()}   # OPTIONS SEQUENTIAL no CTL')
     lines.append("")
     lines.append("paths:")
-    lines.append("  # Base dos dados no servidor SisMOM.")
-    lines.append("  # Caminho completo: <data_base>/<run_tag>/regional/eta/2D/")
-    lines.append("  # Deixe vazio para usar a variavel de ambiente SISMOM_DATA_BASE ou data/")
-    lines.append('  data_base: ""')
-    lines.append('  output_dir: "figuras/campos"')
-    lines.append('  accum_dir:  "figuras/acumulados"')
-    lines.append('  cog_dir:    "cog"')
+    # Deriva data_dir template a partir do caminho do arquivo fonte
+    _src_path  = ctl.get("_source_path", "")
+    _data_tpl  = _path_to_data_dir_template(_src_path)
+    _data_line = f'  data_dir: "{_data_tpl}"' if _data_tpl else '  data_dir: ""  # ex: /dados/{data}/regional/eta/2D'
+    lines.append("  # Caminho dos dados do modelo. Variaveis: {data}={run_tag}=YYYYMMDDHH, {yyyy}, {mm}, {dd}, {hh}")
+    lines.append(_data_line)
+    lines.append('  output_dir: "saida"')
     lines.append('  log_dir:    "logs"')
     lines.append("")
     lines.append("figure:")
@@ -1115,6 +1148,7 @@ def main():
         sys.exit(1)
 
     data["_source_file"] = pathlib.Path(args.input).name
+    data["_source_path"] = str(pathlib.Path(args.input).resolve())
 
     # Modo --list-vars: lista variaveis e sai
     if args.list_vars:

@@ -95,7 +95,8 @@ RUN_TAG = ""; T0 = None; NTIMES = 0; DT_HOURS = 1; TIMESTAMPS = []
 NX = 0; NY = 0; LON0 = 0.0; LAT0 = 0.0; DLON = 0.03; DLAT = 0.03
 LONS = []; LATS = []
 UNDEF = 1e20; DTYPE = ">f4"; FILE_PREFIX = ""; FILE_SUFFIX = ".bin"
-SISMOM_DATA_BASE = ""; DATA_DIR = ""
+SISMOM_DATA_BASE = ""; DATA_DIR = ""; DATA_DIR_TEMPLATE = ""
+# DATA_DIR_TEMPLATE aceita: {data}/{run_tag} = YYYYMMDDHH, {yyyy}, {mm}, {dd}, {hh}
 OUTPUT_DIR = "saida"
 LOG_DIR = "logs"
 DPI = 120; FIG_EXT = "png"
@@ -123,7 +124,7 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     global RUN_TAG, T0, NTIMES, DT_HOURS, TIMESTAMPS
     global NX, NY, LON0, LAT0, DLON, DLAT, LONS, LATS
     global UNDEF, DTYPE, FILE_PREFIX, FILE_SUFFIX
-    global SISMOM_DATA_BASE, DATA_DIR
+    global SISMOM_DATA_BASE, DATA_DIR, DATA_DIR_TEMPLATE
     global OUTPUT_DIR, LOG_DIR
     global DPI, FIG_EXT
     global COG_COMPRESS, COG_ZLEVEL, COG_PREDICTOR, COG_TILE_SIZE
@@ -183,8 +184,9 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
 
     # ── Caminhos ───────────────────────────────────────────────────────
     p    = cfg["paths"]
-    SISMOM_DATA_BASE = str(p.get("data_base", "")) or os.environ.get("SISMOM_DATA_BASE", "")
-    DATA_DIR  = str(p.get("data_dir", ""))
+    SISMOM_DATA_BASE  = str(p.get("data_base", "")) or os.environ.get("SISMOM_DATA_BASE", "")
+    DATA_DIR_TEMPLATE = str(p.get("data_dir", ""))   # suporta {data}, {yyyy}, {mm}, {dd}, {hh}
+    DATA_DIR          = _resolve_path_template(DATA_DIR_TEMPLATE, RUN_TAG) if DATA_DIR_TEMPLATE else ""
     OUTPUT_DIR = str(p.get("output_dir", "saida"))
     LOG_DIR    = str(p.get("log_dir",    "logs"))
 
@@ -224,16 +226,61 @@ def enabled_vars():
     return [v["name"] for v in VARIABLES if v.get("enabled", True)]
 
 
+def _resolve_path_template(template: str, run_tag: str) -> str:
+    """
+    Substitui variaveis de template em um caminho de dados.
+
+    Variaveis suportadas
+    --------------------
+    {data}     -> YYYYMMDDHH  (run_tag completo)
+    {run_tag}  -> YYYYMMDDHH  (alias de {data})
+    {yyyy}     -> YYYY (ano 4 digitos)
+    {mm}       -> MM   (mes 2 digitos)
+    {dd}       -> DD   (dia 2 digitos)
+    {hh}       -> HH   (hora 2 digitos)
+
+    Exemplos
+    --------
+    template = "/dados/sismom/sismom_forecast/{data}/regional/eta/2D"
+    run_tag  = "2026060600"
+    -> "/dados/sismom/sismom_forecast/2026060600/regional/eta/2D"
+
+    template = "/dados/sismom/sismom_forecast/{yyyy}{mm}{dd}{hh}/regional/eta/2D"
+    -> "/dados/sismom/sismom_forecast/2026060600/regional/eta/2D"
+    """
+    if not template or not run_tag or len(run_tag) < 10:
+        return template
+    return (
+        template
+        .replace("{data}",    run_tag)
+        .replace("{run_tag}", run_tag)
+        .replace("{yyyy}",    run_tag[:4])
+        .replace("{mm}",      run_tag[4:6])
+        .replace("{dd}",      run_tag[6:8])
+        .replace("{hh}",      run_tag[8:10])
+    )
+
+
 def build_data_dir(run_tag: str, base: str = "") -> str:
     """
-    Monta o caminho para os dados de uma rodada.
-    Prioridade: --data_base CLI > SISMOM_DATA_BASE env > config.yaml > data/ local.
+    Resolve o caminho dos dados para uma rodada.
+
+    Prioridade
+    ----------
+    1. --data_base CLI  (base != "")  — retrocompat ou template
+    2. data_dir no config.yaml        — suporta template ou caminho fixo
+    3. SISMOM_DATA_BASE env            — base fixa (retrocompat)
+    4. data/ local                    — fallback de desenvolvimento
     """
-    effective_base = base or SISMOM_DATA_BASE
-    if effective_base:
-        return os.path.join(effective_base, run_tag, "regional", "eta", "2D")
-    if DATA_DIR:
-        return DATA_DIR
+    if base:
+        # Suporta template ou caminho-base fixo (retrocompat)
+        if "{" in base:
+            return _resolve_path_template(base, run_tag)
+        return os.path.join(base, run_tag, "regional", "eta", "2D")
+    if DATA_DIR_TEMPLATE:
+        return _resolve_path_template(DATA_DIR_TEMPLATE, run_tag)
+    if SISMOM_DATA_BASE:
+        return os.path.join(SISMOM_DATA_BASE, run_tag, "regional", "eta", "2D")
     return os.path.join("data", run_tag)
 
 
