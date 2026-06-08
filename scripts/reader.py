@@ -36,7 +36,13 @@ def _resolve_filename(data_dir: str, timestamp: datetime):
     Retorna o caminho completo se encontrado, ou None.
     """
     # Primário: formato declarado explicitamente no config.yaml
-    primary_fmt = getattr(config, "FILE_TIMESTAMP_FMT", "")
+    primary_fmt = getattr(config, "FILE_TIMESTAMP_FMT", "%Y%m%d%H")
+
+    # Campo fixo: file_timestamp vazio → arquivo sem parte de timestamp no nome
+    if not primary_fmt:
+        fpath = _build_filename(data_dir, timestamp, "")
+        return fpath if os.path.exists(fpath) else None
+
     if primary_fmt:
         fpath = _build_filename(data_dir, timestamp, primary_fmt)
         if os.path.exists(fpath):

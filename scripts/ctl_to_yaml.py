@@ -278,6 +278,14 @@ def _dset_to_prefix_suffix(dset: str) -> tuple:
             suf_stem = stem[m18.end():]
             return pre_stem, suf_stem + ext, True, "{yyyy}{dd}{hh}"
 
+        # Caso 3: run_tag(10) sem valid_time -> arquivo fixo (ex: _FF.bin)
+        m1 = re.search(r"(\d{10})", stem)
+        if m1:
+            pre_stem = stem[:m1.start()] + "{run_tag}"
+            suf_stem = stem[m1.end():]
+            # file_timestamp vazio indica arquivo fixo (sem timestamp no nome)
+            return pre_stem, suf_stem + ext, False, ""
+
         # Fallback: arquivo unico sem template identificavel
         return dset, "", False, "{yyyy}{mm}{dd}{hh}"
 
@@ -535,6 +543,8 @@ def parse_ctl(path: str) -> dict:
     result["file_prefix"]    = prefix
     result["file_suffix"]    = suffix
     result["file_timestamp"] = file_timestamp
+    # Campo fixo: arquivo unico sem timestamp de validade, TDEF 1
+    result["fixed"] = (file_timestamp == "" and result.get("ntimes", 1) == 1)
 
     # Adiciona metadados inferidos a cada variavel
     zlevels = result["zdef"].get("levels", [])
@@ -633,7 +643,7 @@ def generate_config_yaml(ctl: dict) -> str:
     lines.append("")
     lines.append("run:")
     ntimes_comment = "# numero de passos de tempo (inclui analise = 0)"
-    if ctl.get("ntimes", 1) == 1 and ctl.get("file_prefix", ""):
+    if ctl.get("ntimes", 1) == 1 and ctl.get("file_prefix", "") and not ctl.get("fixed"):
         ntimes_comment += "  !! CTL de timestep unico; ajuste para o total da rodada"
     lines.append(f"  ntimes: {ctl['ntimes']}          {ntimes_comment}")
     lines.append(f"  dt_hours: {ctl['dt_hours']}       # intervalo de saida do modelo em horas")
@@ -657,6 +667,9 @@ def generate_config_yaml(ctl: dict) -> str:
     lines.append('  # {yyyy}=ano {mm}=mes {dd}=dia {hh}=hora. Omita {mm} se o arquivo 3D usar YYYYddhh.')
     lines.append(f'  file_timestamp: "{_ts_tpl}"')
     lines.append(f'  sequential: {str(ctl["sequential"]).lower()}   # OPTIONS SEQUENTIAL no CTL')
+    if ctl.get("fixed"):
+        lines.append("  fixed: true             # campo fixo: gerado uma unica vez por rodada")
+        lines.append("  # O arquivo nao tem timestamp de validade no nome; usa apenas {run_tag}")
     lines.append("")
     lines.append("paths:")
     # Deriva data_dir template a partir do caminho do arquivo fonte
@@ -719,6 +732,8 @@ def generate_variables_yaml(ctl: dict) -> str:
         lines.append(f"    vmax: {vmax}")
         lines.append(f"    precip: {prec}")
         lines.append(f"    enabled: {enab}")
+        if ctl.get("fixed"):
+            lines.append("    fixed: true   # campo fixo: nunca iterar por timesteps")
         if v.get("ndim") == 3:
             nlev_v = v.get("nlev", 0)
             lev_v  = v.get("levels", [])
