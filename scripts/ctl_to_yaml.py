@@ -207,38 +207,44 @@ def _parse_tdef_dt(dt_str: str) -> int:
     raise CTLParseError(f"Unidade de tempo '{unit}' nao suportada (use HR, MN ou DY)")
 
 
-def _dset_to_prefix_suffix(dset: str) -> tuple[str, str, bool]:
+# Mapeamento de tokens GrADS para placeholders de file_timestamp
+_GRADS_TOKEN_MAP = [
+    ('%y4', '{yyyy}'), ('%y2', '{yy}'),
+    ('%m2', '{mm}'),   ('%m1', '{m}'),
+    ('%d2', '{dd}'),   ('%d1', '{d}'),
+    ('%h2', '{hh}'),   ('%h1', '{h}'),
+    ('%n2', '{nn}'),
+]
+
+
+def _dset_to_prefix_suffix(dset: str) -> tuple:
     """
-    Extrai (file_prefix, file_suffix, has_template) do padrao DSET do GrADS.
+    Extrai (file_prefix, file_suffix, has_template, file_timestamp) do DSET GrADS.
 
     O GrADS usa substituicoes de tempo no DSET quando OPTIONS TEMPLATE esta ativo:
-      %y4  -> YYYY (ano 4 digitos)
-      %y2  -> YY
-      %m2  -> MM
-      %m1  -> M
-      %d2  -> DD
-      %d1  -> D
-      %h2  -> HH
-      %h1  -> H
-      %n2  -> mm (minutos)
+      %y4  -> {yyyy}   %y2 -> {yy}
+      %m2  -> {mm}     %m1 -> {m}
+      %d2  -> {dd}     %d1 -> {d}
+      %h2  -> {hh}     %h1 -> {h}
+      %n2  -> {nn}
 
     Ex: 'Eta03_BESM_2026060600+%y4%m2%d2%h2_2D.bin'
-      prefix = 'Eta03_BESM_{run_tag}+'
-      suffix = '_2D.bin'
+      prefix         = 'Eta03_BESM_{run_tag}+'
+      suffix         = '_2D.bin'
+      file_timestamp = '{yyyy}{mm}{dd}{hh}'
+
+    Ex: 'Eta03_BESM_2026060600%y4%d2%h2_3D.bin'
+      file_timestamp = '{yyyy}{dd}{hh}'
 
     Estrategia:
-      - Localiza o primeiro %xN ou %xX (marcador de tempo)
-      - Tudo antes e o prefix (substituindo run_tag se encontrado)
-      - Tudo depois do ultimo marcador de tempo e o suffix
+      - Localiza o primeiro e ultimo token de tempo
+      - Extrai a porcao entre eles e converte para placeholders
     """
-    # Remove ^ inicial (caminho relativo ao CTL no GrADS)
     dset = dset.lstrip('^').strip()
 
-    time_tokens = ['%y4', '%y2', '%m2', '%m1', '%d2', '%d1', '%h2', '%h1', '%n2']
-
-    # Posicao do primeiro e ultimo token de tempo
-    first_pos = len(dset)
-    last_end   = 0
+    time_tokens  = [tok for tok, _ in _GRADS_TOKEN_MAP]
+    first_pos    = len(dset)
+    last_end     = 0
     has_template = False
 
     for tok in time_tokens:
@@ -252,21 +258,25 @@ def _dset_to_prefix_suffix(dset: str) -> tuple[str, str, bool]:
                 last_end = end
 
     if not has_template:
-        # Arquivo unico sem TEMPLATE — prefix = dset inteiro, suffix vazio
-        return dset, "", False
+        return dset, "", False, "{yyyy}{mm}{dd}{hh}"
 
-    raw_prefix = dset[:first_pos]
-    suffix     = dset[last_end:]
+    raw_prefix     = dset[:first_pos]
+    ts_raw         = dset[first_pos:last_end]   # porcao de tokens de tempo
+    suffix         = dset[last_end:]
+
+    # Converte tokens GrADS para placeholders {yyyy}{mm}{dd}{hh}
+    file_timestamp = ts_raw
+    for tok, ph in _GRADS_TOKEN_MAP:
+        file_timestamp = file_timestamp.replace(tok, ph)
 
     # Tenta identificar o run_tag no prefix (sequencia de 10 digitos)
-    # Ex: 'Eta03_BESM_2026060600+' -> run_tag = '2026060600'
     m = re.search(r'(\d{10})', raw_prefix)
     if m:
         prefix = raw_prefix[:m.start()] + "{run_tag}" + raw_prefix[m.end():]
     else:
         prefix = raw_prefix
 
-    return prefix, suffix, True
+    return prefix, suffix, True, file_timestamp
 
 
 def _infer_dtype(options: list[str]) -> str:
@@ -365,7 +375,7 @@ def parse_ctl(path: str) -> dict:
         "nx": 0, "ny": 0,
         "lon0": 0.0, "lat0": 0.0, "dlon": 0.0, "dlat": 0.0,
         "ntimes": 1, "dt_hours": 1,
-        "file_prefix": "", "file_suffix": "",
+        "file_prefix": "", "file_suffix": "", "file_timestamp": "{yyyy}{mm}{dd}{hh}",
         "title": "",
         "variables": [],
         "zdef": {"nz": 1, "levels": []},
@@ -500,9 +510,10 @@ def parse_ctl(path: str) -> dict:
             continue
 
     # Deriva prefix/suffix do DSET
-    prefix, suffix, _ = _dset_to_prefix_suffix(result["dset"])
-    result["file_prefix"] = prefix
-    result["file_suffix"] = suffix
+    prefix, suffix, _, file_timestamp = _dset_to_prefix_suffix(result["dset"])
+    result["file_prefix"]    = prefix
+    result["file_suffix"]    = suffix
+    result["file_timestamp"] = file_timestamp
 
     # Adiciona metadados inferidos a cada variavel
     zlevels = result["zdef"].get("levels", [])
@@ -616,6 +627,11 @@ def generate_config_yaml(ctl: dict) -> str:
     lines.append(f'  dtype: "{ctl["dtype"]}"       # ">f4" big-endian | "<f4" little-endian (BYTESWAPPED)')
     lines.append(f'  file_prefix: "{prefix}"')
     lines.append(f'  file_suffix: "{suffix}"')
+    # file_timestamp: placeholders da parte variavel do nome ({yyyy}{mm}{dd}{hh})
+    _ts_tpl = ctl.get("file_timestamp", "{yyyy}{mm}{dd}{hh}")
+    lines.append(f'  # Formato da parte variavel do nome do arquivo (timestamp do passo).')
+    lines.append(f'  # {yyyy}=ano {mm}=mes {dd}=dia {hh}=hora. Omita {mm} se o arquivo 3D usar YYYYddhh.')
+    lines.append(f'  file_timestamp: "{_ts_tpl}"')
     lines.append(f'  sequential: {str(ctl["sequential"]).lower()}   # OPTIONS SEQUENTIAL no CTL')
     lines.append("")
     lines.append("paths:")
@@ -890,7 +906,7 @@ def parse_netcdf(path: str) -> dict:
         "nx": 0, "ny": 0,
         "lon0": 0.0, "lat0": 0.0, "dlon": 0.0, "dlat": 0.0,
         "ntimes": 1, "dt_hours": 1,
-        "file_prefix": "", "file_suffix": "",
+        "file_prefix": "", "file_suffix": "", "file_timestamp": "{yyyy}{mm}{dd}{hh}",
         "title": "",
         "variables": [],
         "_backend": "",
@@ -1030,8 +1046,9 @@ def parse_netcdf(path: str) -> dict:
 
     # Prefix/suffix a partir do nome do arquivo
     prefix, suffix = _nc_filename_to_prefix_suffix(pathlib.Path(path).name)
-    result["file_prefix"] = prefix
-    result["file_suffix"] = suffix
+    result["file_prefix"]    = prefix
+    result["file_suffix"]    = suffix
+    result["file_timestamp"] = "{yyyy}{mm}{dd}{hh}"  # NetCDF: padrao 10-char
 
     return result
 
