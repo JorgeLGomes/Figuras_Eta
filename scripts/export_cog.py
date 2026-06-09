@@ -73,22 +73,23 @@ CRS_WGS84 = CRS.from_epsg(4326)
 def _get_transform():
     """
     Retorna o Affine transform rasterio para a grade atual.
-    - Grade regular : usa LON0/LAT0/DLON/DLAT diretamente.
-    - Grade irregular (gaussiana): usa lat min/max + espacamento medio.
-    - Grade global 0-360: ajusta ul_lon para -180 (apos roll do array).
-    Sempre recalculado para refletir a grade carregada em config.
+
+    GrADS LON0/LAT0 sao centros de celula; from_origin espera o canto
+    (corner) superior esquerdo do primeiro pixel. Correcao de meio pixel:
+      ul_lon = LON0 - DLON/2
+      ul_lat = lat_max + dlat_top/2
+    Elimina o offset sistematico de ~DLON/2 visivel em grades esparsas (ex BESM).
     """
-    if getattr(config, "NEEDS_LON_ROLL", False):
-        ul_lon = -180.0
-    else:
-        ul_lon  = config.LON0
+    # Canto oeste: LON0 e centro da celula 0, canto = LON0 - DLON/2
+    ul_lon = config.LON0 - config.DLON / 2.0
     if getattr(config, "IRREGULAR_LAT", False) and len(config.LATS) > 1:
-        # Grade irregular: UL = lat máxima; espaçamento médio
-        ul_lat  = float(config.LATS[-1])
-        dlat    = float((config.LATS[-1] - config.LATS[0]) / (config.NY - 1))
+        # Grade irregular: canto norte = ultimo ponto + metade do espacamento topo
+        top_spacing = float(config.LATS[-1] - config.LATS[-2])
+        ul_lat = float(config.LATS[-1]) + top_spacing / 2.0
+        dlat   = float((config.LATS[-1] - config.LATS[0]) / (config.NY - 1))
     else:
-        ul_lat  = config.LAT0 + (config.NY - 1) * config.DLAT
-        dlat    = config.DLAT
+        ul_lat = config.LAT0 + (config.NY - 0.5) * config.DLAT
+        dlat   = config.DLAT
     return from_origin(ul_lon, ul_lat, config.DLON, dlat)
 
 # Variaveis de precipitacao que precisam de conversao m -> mm
@@ -138,10 +139,6 @@ def _prepare_array(data: np.ndarray, var_name: str) -> np.ndarray:
         arr = _regrid_to_regular(arr)   # gaussiana -> regular (S->N)
 
     arr = np.flipud(arr)            # S->N para N->S
-
-    # Grade global 0-360: rolar colunas para convencao -180/+180
-    if getattr(config, "NEEDS_LON_ROLL", False) and getattr(config, "LON_ROLL_IDX", 0) != 0:
-        arr = np.roll(arr, config.LON_ROLL_IDX, axis=1)
 
     arr = np.where(np.isnan(arr), np.float32(NODATA), arr)
     return arr
