@@ -408,6 +408,8 @@ def parse_ctl(path: str) -> dict:
         "title": "",
         "variables": [],
         "zdef": {"nz": 1, "levels": []},
+        "lat_levels": [],   # preenchido quando YDEF LEVELS (grade nao-regular)
+        "lon_levels": [],   # preenchido quando XDEF LEVELS (grade nao-regular)
     }
 
     lines = ctl.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -417,6 +419,12 @@ def parse_ctl(path: str) -> dict:
     in_zdef = False
     zdef_nz = 0
     zdef_values = []
+    in_ydef = False
+    ydef_ny = 0
+    ydef_values = []
+    in_xdef = False
+    xdef_nx = 0
+    xdef_values = []
 
     for raw_line in lines:
         line = raw_line.strip()
@@ -453,22 +461,82 @@ def parse_ctl(path: str) -> dict:
             result["dtype"]      = _infer_dtype(opts)
             continue
 
-        # XDEF  NX  LINEAR  lon0  dlon
-        if upper.startswith("XDEF"):
-            parts = line.split()
-            if len(parts) >= 5 and parts[2].upper() == "LINEAR":
-                result["nx"]   = int(parts[1])
-                result["lon0"] = float(parts[3])
-                result["dlon"] = float(parts[4])
+        # Coleta de niveis XDEF LEVELS (multi-linha)
+        if in_xdef:
+            for tok in line.split():
+                try: xdef_values.append(float(tok))
+                except ValueError: pass
+            if len(xdef_values) >= xdef_nx:
+                in_xdef = False
+                result["lon_levels"] = xdef_values[:xdef_nx]
+                result["lon0"] = result["lon_levels"][0]
+                result["dlon"] = round(
+                    (result["lon_levels"][-1] - result["lon_levels"][0]) / (xdef_nx - 1), 8
+                ) if xdef_nx > 1 else 0.0
             continue
 
-        # YDEF  NY  LINEAR  lat0  dlat
+        # Coleta de niveis YDEF LEVELS (multi-linha)
+        if in_ydef:
+            for tok in line.split():
+                try: ydef_values.append(float(tok))
+                except ValueError: pass
+            if len(ydef_values) >= ydef_ny:
+                in_ydef = False
+                result["lat_levels"] = ydef_values[:ydef_ny]
+                result["lat0"] = result["lat_levels"][0]
+                result["dlat"] = round(
+                    (result["lat_levels"][-1] - result["lat_levels"][0]) / (ydef_ny - 1), 8
+                ) if ydef_ny > 1 else 0.0
+            continue
+
+        # XDEF  NX  LINEAR  lon0  dlon  |  LEVELS lon1 lon2 ...
+        if upper.startswith("XDEF"):
+            parts = line.split()
+            if len(parts) >= 2:
+                xdef_nx = int(parts[1])
+                result["nx"] = xdef_nx
+            if len(parts) >= 5 and parts[2].upper() == "LINEAR":
+                result["lon0"] = float(parts[3])
+                result["dlon"] = float(parts[4])
+            elif len(parts) > 2 and parts[2].upper() == "LEVELS":
+                inline = []
+                for tok in parts[3:]:
+                    try: inline.append(float(tok))
+                    except ValueError: pass
+                xdef_values = inline
+                if len(inline) >= xdef_nx:
+                    result["lon_levels"] = inline[:xdef_nx]
+                    result["lon0"] = result["lon_levels"][0]
+                    result["dlon"] = round(
+                        (result["lon_levels"][-1] - result["lon_levels"][0]) / (xdef_nx - 1), 8
+                    ) if xdef_nx > 1 else 0.0
+                else:
+                    in_xdef = True
+            continue
+
+        # YDEF  NY  LINEAR  lat0  dlat  |  LEVELS lat1 lat2 ...
         if upper.startswith("YDEF"):
             parts = line.split()
+            if len(parts) >= 2:
+                ydef_ny = int(parts[1])
+                result["ny"] = ydef_ny
             if len(parts) >= 5 and parts[2].upper() == "LINEAR":
-                result["ny"]   = int(parts[1])
                 result["lat0"] = float(parts[3])
                 result["dlat"] = float(parts[4])
+            elif len(parts) > 2 and parts[2].upper() == "LEVELS":
+                inline = []
+                for tok in parts[3:]:
+                    try: inline.append(float(tok))
+                    except ValueError: pass
+                ydef_values = inline
+                if len(inline) >= ydef_ny:
+                    result["lat_levels"] = inline[:ydef_ny]
+                    result["lat0"] = result["lat_levels"][0]
+                    result["dlat"] = round(
+                        (result["lat_levels"][-1] - result["lat_levels"][0]) / (ydef_ny - 1), 8
+                    ) if ydef_ny > 1 else 0.0
+                else:
+                    in_ydef = True
             continue
 
         # TDEF  NTIMES  LINEAR  start  dt
@@ -652,9 +720,32 @@ def generate_config_yaml(ctl: dict) -> str:
     lines.append(f"  nx: {ctl['nx']}")
     lines.append(f"  ny: {ctl['ny']}")
     lines.append(f"  lon0: {ctl['lon0']}   # longitude do canto sudoeste (graus E)")
-    lines.append(f"  lat0: {ctl['lat0']}   # latitude do canto sudoeste (graus N)")
+    _lat_lev = ctl.get("lat_levels", [])
+    _lon_lev = ctl.get("lon_levels", [])
+    _lat0_cmt = "# latitude do canto sudoeste (graus N)" + (" [aprox, ver lat_levels]" if _lat_lev else "")
+    lines.append(f"  lat0: {ctl['lat0']}   {_lat0_cmt}")
     lines.append(f"  dlon: {ctl['dlon']}")
-    lines.append(f"  dlat: {ctl['dlat']}")
+    _dlat_val = "~" if _lat_lev else str(ctl["dlat"])
+    _dlat_cmt = "# null = grade irregular; use lat_levels" if _lat_lev else ""
+    lines.append(f"  dlat: {_dlat_val}    {_dlat_cmt}".rstrip())
+    if _lat_lev:
+        def _fmt_lev(vals, indent="    "):
+            rows = []
+            for i in range(0, len(vals), 8):
+                chunk = vals[i:i+8]
+                rows.append(indent + ", ".join("{:.5f}".format(v) for v in chunk))
+            return "[\n" + ",\n".join(rows) + "]"
+        lines.append("  # Latitudes da grade Y (ex.: gaussianas). Ordem: S -> N.")
+        lines.append("  lat_levels: " + _fmt_lev(_lat_lev))
+    if _lon_lev:
+        def _fmt_lev_lon(vals, indent="    "):
+            rows = []
+            for i in range(0, len(vals), 8):
+                chunk = vals[i:i+8]
+                rows.append(indent + ", ".join("{:.5f}".format(v) for v in chunk))
+            return "[\n" + ",\n".join(rows) + "]"
+        lines.append("  # Longitudes da grade X (irregular).")
+        lines.append("  lon_levels: " + _fmt_lev_lon(_lon_lev))
     lines.append("")
     lines.append("model:")
     lines.append(f"  undef: {undef_str}")
@@ -667,6 +758,7 @@ def generate_config_yaml(ctl: dict) -> str:
     lines.append('  # {yyyy}=ano {mm}=mes {dd}=dia {hh}=hora. Omita {mm} se o arquivo 3D usar YYYYddhh.')
     lines.append(f'  file_timestamp: "{_ts_tpl}"')
     lines.append(f'  sequential: {str(ctl["sequential"]).lower()}   # OPTIONS SEQUENTIAL no CTL')
+    lines.append(f'  yrev: {str(ctl.get("yrev", False)).lower()}        # OPTIONS YREV: dados invertidos em Y no arquivo')
     if ctl.get("fixed"):
         lines.append("  fixed: true             # campo fixo: gerado uma unica vez por rodada")
         lines.append("  # O arquivo nao tem timestamp de validade no nome; usa apenas {run_tag}")

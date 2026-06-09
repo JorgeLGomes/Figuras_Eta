@@ -70,14 +70,22 @@ def _cog_params():
 # CRS: WGS84 geografico
 CRS_WGS84 = CRS.from_epsg(4326)
 
-# Transform rasterio: canto superior esquerdo, DLAT negativo (N->S)
-# GrADS armazena de sul para norte; rasterio espera norte para sul.
-# upper_left_lat = LAT0 + (NY - 1) * DLAT  (linha 0 = norte)
-_UL_LAT = config.LAT0 + (config.NY - 1) * config.DLAT
-_UL_LON = config.LON0
-
-# from_origin(west, north, xsize, ysize) → transform com ysize positivo internamente
-TRANSFORM = from_origin(_UL_LON, _UL_LAT, config.DLON, config.DLAT)
+def _get_transform():
+    """
+    Retorna o Affine transform rasterio para a grade atual.
+    - Grade regular : usa LON0/LAT0/DLON/DLAT diretamente.
+    - Grade irregular (gaussiana): usa lat min/max + espaçamento médio.
+    Sempre recalculado para refletir a grade carregada em config.
+    """
+    ul_lon  = config.LON0
+    if getattr(config, "IRREGULAR_LAT", False) and len(config.LATS) > 1:
+        # Grade irregular: UL = lat máxima; espaçamento médio
+        ul_lat  = float(config.LATS[-1])
+        dlat    = float((config.LATS[-1] - config.LATS[0]) / (config.NY - 1))
+    else:
+        ul_lat  = config.LAT0 + (config.NY - 1) * config.DLAT
+        dlat    = config.DLAT
+    return from_origin(ul_lon, ul_lat, config.DLON, dlat)
 
 # Variaveis de precipitacao que precisam de conversao m -> mm
 _PRECIP_VARS = {"PREC", "PRCV", "PRGE", "NEVE"}
@@ -87,9 +95,31 @@ _PRECIP_VARS = {"PREC", "PRCV", "PRGE", "NEVE"}
 # PREPARACAO DO ARRAY
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _regrid_to_regular(arr: np.ndarray) -> np.ndarray:
+    """
+    Reamostrage de grade irregular (ex.: gaussiana) para grade regular.
+    Interpola ao longo do eixo lat (eixo 0) usando os valores de config.LATS.
+    Entrada / saída: (NY, NX) float32, S->N.
+    """
+    lats_irreg = config.LATS          # latitudes irregulares S->N
+    lats_reg   = np.linspace(lats_irreg[0], lats_irreg[-1], len(lats_irreg))
+    try:
+        from scipy.interpolate import interp1d
+        f   = interp1d(lats_irreg, arr, axis=0, kind="linear",
+                       bounds_error=False, fill_value=np.nan)
+        return f(lats_reg).astype(np.float32)
+    except ImportError:
+        # Fallback sem scipy: np.interp coluna por coluna
+        out = np.empty_like(arr)
+        for j in range(arr.shape[1]):
+            out[:, j] = np.interp(lats_reg, lats_irreg, arr[:, j])
+        return out
+
+
 def _prepare_array(data: np.ndarray, var_name: str) -> np.ndarray:
     """
     - Converte m->mm para precipitacao
+    - Reamostrage para grade regular quando grade Y é irregular (gaussiana)
     - Flipa verticalmente (GrADS: S->N; rasterio: N->S)
     - Substitui NaN por NODATA
     - Retorna float32
@@ -99,6 +129,9 @@ def _prepare_array(data: np.ndarray, var_name: str) -> np.ndarray:
     if var_name in _PRECIP_VARS:
         with np.errstate(over="ignore", invalid="ignore"):
             arr = arr * 1000.0      # m -> mm
+
+    if getattr(config, "IRREGULAR_LAT", False):
+        arr = _regrid_to_regular(arr)   # gaussiana -> regular (S->N)
 
     arr = np.flipud(arr)            # S->N para N->S
 
@@ -146,7 +179,7 @@ def write_cog(
         "height"    : config.NY,
         "count"     : 1,
         "crs"       : CRS_WGS84,
-        "transform" : TRANSFORM,
+        "transform" : _get_transform(),
         "nodata"    : NODATA,
         "compress"  : _compress,
         "zlevel"    : _zlevel,

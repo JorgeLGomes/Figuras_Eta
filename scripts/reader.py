@@ -252,8 +252,10 @@ def read_fields_selective(
     nfloats = nx * ny
     nbytes  = nfloats * 4
 
+    _yrev = getattr(config, "YREV", False)
     def _clean(arr):
         arr = arr.astype(np.float32).reshape(ny, nx).copy()
+        if _yrev: arr = arr[::-1, :]
         with np.errstate(invalid="ignore"):
             arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
         return arr

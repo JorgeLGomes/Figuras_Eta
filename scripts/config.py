@@ -94,6 +94,9 @@ def resolve_run_tag(run_input: str, ref_date: _date = None) -> str:
 RUN_TAG = ""; T0 = None; NTIMES = 0; DT_HOURS = 1; TIMESTAMPS = []
 NX = 0; NY = 0; LON0 = 0.0; LAT0 = 0.0; DLON = 0.03; DLAT = 0.03
 LONS = []; LATS = []
+LAT_LEVELS = []; LON_LEVELS = []   # listas de coords quando grade irregular
+IRREGULAR_LAT = False; IRREGULAR_LON = False
+YREV = False  # OPTIONS YREV: eixo Y invertido no binário
 UNDEF = 1e20; DTYPE = ">f4"; FILE_PREFIX = ""; FILE_SUFFIX = ".bin"; FILE_TIMESTAMP_FMT = "%Y%m%d%H"
 SISMOM_DATA_BASE = ""; DATA_DIR = ""; DATA_DIR_TEMPLATE = ""
 # DATA_DIR_TEMPLATE aceita: {data}/{run_tag} = YYYYMMDDHH, {yyyy}, {mm}, {dd}, {hh}
@@ -140,6 +143,8 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     """
     global RUN_TAG, T0, NTIMES, DT_HOURS, TIMESTAMPS
     global NX, NY, LON0, LAT0, DLON, DLAT, LONS, LATS
+    global LAT_LEVELS, LON_LEVELS, IRREGULAR_LAT, IRREGULAR_LON
+    global YREV
     global UNDEF, DTYPE, FILE_PREFIX, FILE_SUFFIX, FILE_TIMESTAMP_FMT
     global SISMOM_DATA_BASE, DATA_DIR, DATA_DIR_TEMPLATE
     global OUTPUT_DIR, LOG_DIR
@@ -190,9 +195,26 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     LON0 = float(g["lon0"])
     LAT0 = float(g["lat0"])
     DLON = float(g["dlon"])
-    DLAT = float(g["dlat"])
-    LONS = np.linspace(LON0, LON0 + (NX - 1) * DLON, NX)
-    LATS = np.linspace(LAT0, LAT0 + (NY - 1) * DLAT, NY)
+
+    # lat_levels / lon_levels: grade irregular (ex.: gaussiana)
+    _lat_lev_raw = g.get("lat_levels") or []
+    _lon_lev_raw = g.get("lon_levels") or []
+    LAT_LEVELS    = [float(v) for v in _lat_lev_raw]
+    LON_LEVELS    = [float(v) for v in _lon_lev_raw]
+    IRREGULAR_LAT = bool(LAT_LEVELS)
+    IRREGULAR_LON = bool(LON_LEVELS)
+
+    if IRREGULAR_LAT:
+        DLAT = float(round((LAT_LEVELS[-1] - LAT_LEVELS[0]) / (NY - 1), 8)) if NY > 1 else 0.0
+        LATS = np.array(LAT_LEVELS, dtype=np.float64)
+    else:
+        DLAT = float(g.get("dlat") or 0.0)
+        LATS = np.linspace(LAT0, LAT0 + (NY - 1) * DLAT, NY)
+
+    if IRREGULAR_LON:
+        LONS = np.array(LON_LEVELS, dtype=np.float64)
+    else:
+        LONS = np.linspace(LON0, LON0 + (NX - 1) * DLON, NX)
 
     # ── Modelo ────────────────────────────────────────────────────────────────
     m           = cfg["model"]
@@ -207,6 +229,7 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     #   {yyyy}{dd}{hh}      ->  20260600    (3D sem mes, 8 chars)
 
     FIXED_RUN = bool(m.get("fixed", False))
+    YREV      = bool(m.get("yrev",  False))
 
     # ── Caminhos ───────────────────────────────────────────────────────
     p    = cfg["paths"]
