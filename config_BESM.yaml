@@ -1,0 +1,64 @@
+# Gerado a partir de: /dados/sismom/SisMOM/sismom_forecast/2026060600/global/atmos/template.ctl
+# Titulo original: PRESSURE HISTORY    PTEC AGCM REVIS 1.0 2000  T006242   COLD
+
+# ─────────────────────────────────────────────────────────────────────────────
+# config.yaml — Configuracao do modelo (gerado por ctl_to_yaml.py)
+#
+# A tag da rodada NAO fica aqui; passe sempre via --run no CLI:
+#   --run 2026060600   (YYYYMMDDHH completo)
+#   --run 00           (00Z de hoje, data do sistema)
+# ─────────────────────────────────────────────────────────────────────────────
+
+run:
+  ntimes: 30          # numero de passos de tempo (inclui analise = 0)
+  dt_hours: 24       # intervalo de saida do modelo em horas
+
+grid:
+  nx: 192
+  ny: 96
+  lon0: 0.0   # longitude do canto sudoeste (graus E)
+  lat0: -88.57217   # latitude do canto sudoeste (graus N) [aprox, ver lat_levels]
+  dlon: 1.875
+  dlat: ~    # null = grade irregular; use lat_levels
+  # Latitudes da grade Y (ex.: gaussianas). Ordem: S -> N.
+  lat_levels: [
+    -88.57217, -86.72253, -84.86197, -82.99894, -81.13498, -79.27056, -77.40589, -75.54106,
+    -73.67613, -71.81113, -69.94608, -68.08099, -66.21587, -64.35073, -62.48557, -60.62040,
+    -58.75521, -56.89001, -55.02481, -53.15960, -51.29438, -49.42915, -47.56393, -45.69869,
+    -43.83346, -41.96822, -40.10298, -38.23774, -36.37249, -34.50724, -32.64199, -30.77674,
+    -28.91149, -27.04624, -25.18099, -23.31573, -21.45048, -19.58522, -17.71996, -15.85470,
+    -13.98945, -12.12419, -10.25893, -8.39367, -6.52841, -4.66315, -2.79789, -0.93263,
+    0.93263, 2.79789, 4.66315, 6.52841, 8.39367, 10.25893, 12.12419, 13.98945,
+    15.85470, 17.71996, 19.58522, 21.45048, 23.31573, 25.18099, 27.04624, 28.91149,
+    30.77674, 32.64199, 34.50724, 36.37249, 38.23774, 40.10298, 41.96822, 43.83346,
+    45.69869, 47.56393, 49.42915, 51.29438, 53.15960, 55.02481, 56.89001, 58.75521,
+    60.62040, 62.48557, 64.35073, 66.21587, 68.08099, 69.94608, 71.81113, 73.67613,
+    75.54106, 77.40589, 79.27056, 81.13498, 82.99894, 84.86197, 86.72253, 88.57217]
+
+model:
+  undef: -2.560e+33
+  dtype: ">f4"       # ">f4" big-endian | "<f4" little-endian (BYTESWAPPED)
+  file_prefix: "GPOSNMC{run_tag}"
+  file_suffix: "C.fct.TQ0062L042"
+  # Formato da parte variavel do nome do arquivo (timestamp do passo).
+  # {yyyy}=ano {mm}=mes {dd}=dia {hh}=hora. Omita {mm} se o arquivo 3D usar YYYYddhh.
+  file_timestamp: "{yyyy}{mm}{dd}{hh}"
+  sequential: true   # OPTIONS SEQUENTIAL no CTL
+  yrev: true        # OPTIONS YREV: dados invertidos em Y no arquivo
+
+paths:
+  # Caminho dos dados do modelo. Variaveis: {data}={run_tag}=YYYYMMDDHH, {yyyy}, {mm}, {dd}, {hh}
+  data_dir: "/dados/sismom/SisMOM/sismom_forecast/{data}/global/atmos"
+  output_dir: "saida"
+  log_dir:    "logs"
+
+figure:
+  ext: "png"
+  dpi: 120
+
+accumulation:
+  hours: 24          # 24h = ACUM00Z + ACUM12Z; outros = janelas sequenciais
+  precip_vars:
+    - PREC
+    - PRCV
+    - NEVE

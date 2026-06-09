@@ -1,0 +1,612 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# variables.yaml — Variaveis 2D do modelo (gerado por ctl_to_yaml.py)
+# Fonte: template_BESM.ctl
+#
+# A ORDEM deve coincidir com o arquivo CTL do modelo.
+# cmap: colormap matplotlib; 'precip' usa paleta propria
+# vmin/vmax: null = escala automatica por percentis
+# enabled: false para desativar plot e COG (mantém posicao binaria)
+# ─────────────────────────────────────────────────────────────────────────────
+
+variables:
+
+  - name: TOPO
+    description: "TOPOGRAPHY                              (M               )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: LSMK
+    description: "LAND SEA MASK                           (NO DIM          )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: AMDL
+    description: "STORAGE ON CANOPY                       (M               )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: AMSL
+    description: "STORAGE ON GROUND                       (M               )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: USSL
+    description: "SOIL WETNESS OF SURFACE                 (No Dim          )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: UZRS
+    description: "SOIL WETNESS OF ROOT ZONE               (No Dim          )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: UZDS
+    description: "SOIL WETNESS OF DRAINAGE ZONE           (No Dim          )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: PSMT
+    description: "TIME MEAN SURFACE PRESSURE              (Cb              )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: USMT
+    description: "TIME MEAN SURFACE ZONAL WIND (U)        (M/Sec           )"
+    units: "U"
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: UVMT
+    description: "TIME MEAN ZONAL WIND (U)                (M/Sec           )"
+    units: "U"
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: VSMT
+    description: "TIME MEAN SURFACE MERIDIONAL WIND (V)   (M/Sec           )"
+    units: "V"
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: VVMT
+    description: "TIME MEAN MERIDIONAL WIND (V)           (M/Sec           )"
+    units: "V"
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: GHMT
+    description: "TIME MEAN GEOPOTENTIAL HEIGHT           (M               )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: SPMT
+    description: "TIME MEAN SEA LEVEL PRESSURE            (Mb              )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: TSMT
+    description: "TIME MEAN SURFACE ABSOLUTE TEMPERATURE  (K               )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: ATMT
+    description: "TIME MEAN ABSOLUTE TEMPERATURE          (K               )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: RSMT
+    description: "TIME MEAN SURFACE RELATIVE HUMIDITY     (No Dim          )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: RHMT
+    description: "TIME MEAN RELATIVE HUMIDITY             (No Dim          )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: SHMT
+    description: "TIME MEAN SPECIFIC HUMIDITY             (No Dim          )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: PCMT
+    description: "TIME MEAN PRECIP. WATER                 (Kg M**-2        )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: OMTM
+    description: "TIME MEAN OMEGA                         (Cb/Sec          )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: PREC
+    description: "TOTAL PRECIPITATION                     (Kg M**-2 Day**-1)"
+    units: ""
+    cmap: precip
+    vmin: 0
+    vmax: 50
+    precip: true
+    enabled: true
+
+  - name: PRCV
+    description: "CONVECTIVE PRECIPITATION                (Kg M**-2 Day**-1)"
+    units: ""
+    cmap: precip
+    vmin: 0
+    vmax: 40
+    precip: true
+    enabled: true
+
+  - name: NEVE
+    description: "SNOWFALL                                (Kg M**-2 Day**-1)"
+    units: ""
+    cmap: Blues
+    vmin: 0
+    vmax: 20
+    precip: true
+    enabled: true
+
+  - name: RNOF
+    description: "RUNOFF                                  (Kg M**-2 Day**-1)"
+    units: ""
+    cmap: Blues
+    vmin: 0
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: PITP
+    description: "INTERCEPTION LOSS                       (W M**-2         )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: CSSF
+    description: "SENSIBLE HEAT FLUX FROM SURFACE         (W M**-2         )"
+    units: ""
+    cmap: RdBu
+    vmin: -50
+    vmax: 300
+    precip: false
+    enabled: true
+
+  - name: CLSF
+    description: "LATENT HEAT FLUX FROM SURFACE           (W M**-2         )"
+    units: ""
+    cmap: RdBu
+    vmin: -200
+    vmax: 600
+    precip: false
+    enabled: true
+
+  - name: EVAP
+    description: "EVAPORATION                             (Kg M**-2 Day**-1)"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: CBNV
+    description: "CLOUD COVER                             (No Dim          )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: OLIS
+    description: "DOWNWARD LONG WAVE AT BOTTOM            (W M**-2         )"
+    units: ""
+    cmap: inferno
+    vmin: 200
+    vmax: 450
+    precip: false
+    enabled: true
+
+  - name: OLES
+    description: "UPWARD LONG WAVE AT BOTTOM              (W M**-2         )"
+    units: ""
+    cmap: inferno
+    vmin: 200
+    vmax: 450
+    precip: false
+    enabled: true
+
+  - name: ROLE
+    description: "OUTGOING LONG WAVE AT TOP               (W M**-2         )"
+    units: ""
+    cmap: inferno
+    vmin: 150
+    vmax: 300
+    precip: false
+    enabled: true
+
+  - name: ISWF
+    description: "INCIDENT SHORT WAVE FLUX                (W M**-2         )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: OCIS
+    description: "DOWNWARD SHORT WAVE AT GROUND           (W M**-2         )"
+    units: ""
+    cmap: YlOrRd
+    vmin: 0
+    vmax: 900
+    precip: false
+    enabled: true
+
+  - name: OCES
+    description: "UPWARD SHORT WAVE AT GROUND             (W M**-2         )"
+    units: ""
+    cmap: YlOrRd
+    vmin: 0
+    vmax: 200
+    precip: false
+    enabled: true
+
+  - name: ROCE
+    description: "UPWARD SHORT WAVE AT TOP                (W M**-2         )"
+    units: ""
+    cmap: YlOrRd
+    vmin: 0
+    vmax: 500
+    precip: false
+    enabled: true
+
+  - name: SWAE
+    description: "SHORT WAVE ABSORBED BY EARTH/ATMOSPHERE (W M**-2         )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: OCAS
+    description: "SHORT WAVE ABSORBED AT GROUND           (W M**-2         )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: LWRH
+    description: "LONG WAVE RADIATIVE HEATING             (K/Sec           )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: SWRH
+    description: "SHORT WAVE RADIATIVE HEATING            (K/Sec           )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: CVLH
+    description: "CONVECTIVE LATENT HEATING               (K/Sec           )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: CVMS
+    description: "CONVECTIVE MOISTURE SOURCE              (1/Sec           )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: OLIC
+    description: "DOWNWARD LONG WAVE AT BOTTOM (CLEAR)    (W M**-2         )"
+    units: "CLEAR"
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: LWTC
+    description: "OUTGOING LONG WAVE AT TOP (CLEAR)       (W M**-2         )"
+    units: "CLEAR"
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: OCIC
+    description: "DOWNWARD SHORT WAVE AT GROUND (CLEAR)   (W M**-2         )"
+    units: "CLEAR"
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: SWGC
+    description: "UPWARD SHORT WAVE AT GROUND (CLEAR)     (W M**-2         )"
+    units: "CLEAR"
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: SWTC
+    description: "UPWARD SHORT WAVE AT TOP (CLEAR)        (W M**-2         )"
+    units: "CLEAR"
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: SAEA
+    description: "SHORT WV ABSRBD BY EARTH/ATMOS (CLEAR)  (W M**-2         )"
+    units: "CLEAR"
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: NLWB
+    description: "NET LONG WAVE AT BOTTOM (CLEAR)         (W M**-2         )"
+    units: "CLEAR"
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: TDST
+    description: "TIME MEAN DEEP SOIL TEMPERATURE         (K               )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: TGSC
+    description: "GROUND/SURFACE COVER TEMPERATURE        (K               )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: TCAS
+    description: "TEMPERATURE OF CANOPY AIR SPACE         (K               )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: VDCC
+    description: "VERTICAL DIST TOTAL CLOUD COVER         (No Dim          )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: T2MT
+    description: "TIME MEAN TEMP AT 2-M FROM SFC          (K               )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: Q2MT
+    description: "TIME MEAN SPEC HUMIDITY AT 2-M FROM SFC (No Dim          )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: U10T
+    description: "TIME MEAN AT 10 METRE U-WIND COMPONENT  (M/Sec           )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: V10T
+    description: "TIME MEAN AT 10 METRE V-WIND COMPONENT  (M/Sec           )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: TKE2
+    description: "TURBULENT KINETIC ENERGY                (M/Sec           )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+    ndim: 3
+    nlev: 18
+    levels: [1000, 925, 850, 775, 700, 500, 400, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 3]
+    plot_levels: [1000, 925, 850, 775, 700, 500]
+
+  - name: W100
+    description: "SPEED WIND AT 100-M FROM SURFACE LAYER  (M/Sec           )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
+
+  - name: D100
+    description: "DIR WIND AT 100-M FROM SURFACE LAYER    (Degrees         )"
+    units: ""
+    cmap: viridis
+    vmin: ~
+    vmax: ~
+    precip: false
+    enabled: true
