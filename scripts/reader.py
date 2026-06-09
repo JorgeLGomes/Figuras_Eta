@@ -121,6 +121,10 @@ def read_field(
     arr = np.frombuffer(raw, dtype=dtype).astype(np.float32)
     arr = arr.reshape((ny, nx))
 
+    # OPTIONS YREV: binario N->S, inverter para S->N (convencao padrao)
+    if getattr(config, "YREV", False):
+        arr = arr[::-1, :]
+
     # Substitui undef por NaN (suprime warning de inf/nan na subtracao)
     with np.errstate(invalid="ignore"):
         arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
@@ -185,11 +189,13 @@ def read_all_fields(
         nlev = int(v.get("nlev", 0) or 0) if isinstance(v, dict) else 0
         idx  = config.VAR_INDEX[name]   # offset binario correto
 
+        _yrev = getattr(config, "YREV", False)
         if nlev > 0:
             # 3D: empilha nlev campos -> (nlev, NY, NX)
             arrs = []
             for k in range(nlev):
                 arr = all_raw[idx + k].copy()
+                if _yrev: arr = arr[::-1, :]
                 with np.errstate(invalid="ignore"):
                     arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
                 arrs.append(arr)
@@ -197,6 +203,7 @@ def read_all_fields(
         else:
             # 2D: campo unico -> (NY, NX)
             arr = all_raw[idx].copy()
+            if _yrev: arr = arr[::-1, :]
             with np.errstate(invalid="ignore"):
                 arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
             result[name] = arr
