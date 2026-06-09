@@ -766,7 +766,7 @@ def generate_config_yaml(ctl: dict) -> str:
     lines.append("paths:")
     # Deriva data_dir template a partir do caminho do arquivo fonte
     _src_path  = ctl.get("_source_path", "")
-    _data_tpl  = _path_to_data_dir_template(_src_path)
+    _data_tpl  = ctl.get("_data_dir_override") or _path_to_data_dir_template(_src_path)
     _data_line = f'  data_dir: "{_data_tpl}"' if _data_tpl else '  data_dir: ""  # ex: /dados/{data}/regional/eta/2D'
     lines.append("  # Caminho dos dados do modelo. Variaveis: {data}={run_tag}=YYYYMMDDHH, {yyyy}, {mm}, {dd}, {hh}")
     lines.append(_data_line)
@@ -1254,6 +1254,8 @@ def main():
         epilog=textwrap.dedent("""\
             Exemplos:
               python ctl_to_yaml.py Eta03_BESM_2026060600+000_2D.ctl
+              python ctl_to_yaml.py template.ctl --data-dir "/dados/sismom/{data}/global/atmos"
+              python ctl_to_yaml.py template.ctl --ntimes 72 --dt-hours 1
               python ctl_to_yaml.py saida_modelo.nc
               python ctl_to_yaml.py saida.nc --list-vars
               python ctl_to_yaml.py saida.nc --next-to-ctl --force
@@ -1278,6 +1280,18 @@ def main():
         help="Lista as variaveis encontradas com metadados e sai (sem gerar YAMLs)")
     parser.add_argument("--force", action="store_true",
         help="Sobrepoe arquivos existentes sem perguntar")
+    parser.add_argument("--data-dir", dest="data_dir", default=None,
+        metavar="PATH",
+        help="Substitui o data_dir no config gerado. "
+             "Aceita variaveis: {data} {run_tag} {yyyy} {mm} {dd} {hh}. "
+             "Ex: /dados/sismom/{data}/regional/eta/2D")
+    parser.add_argument("--ntimes", type=int, default=None,
+        metavar="N",
+        help="Substitui o ntimes no config gerado "
+             "(util quando o CTL de entrada e de um unico timestep)")
+    parser.add_argument("--dt-hours", dest="dt_hours", type=int, default=None,
+        metavar="H",
+        help="Substitui o dt_hours no config gerado")
 
     args = parser.parse_args()
 
@@ -1297,6 +1311,14 @@ def main():
 
     data["_source_file"] = pathlib.Path(args.input).name
     data["_source_path"] = str(pathlib.Path(args.input).resolve())
+
+    # Aplica overrides de linha de comando
+    if args.data_dir is not None:
+        data["_data_dir_override"] = args.data_dir
+    if args.ntimes is not None:
+        data["ntimes"] = args.ntimes
+    if args.dt_hours is not None:
+        data["dt_hours"] = args.dt_hours
 
     # Modo --list-vars: lista variaveis e sai
     if args.list_vars:
