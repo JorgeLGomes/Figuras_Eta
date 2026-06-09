@@ -107,6 +107,8 @@ COG_COMPRESS = "DEFLATE"; COG_ZLEVEL = 1; COG_PREDICTOR = 2; COG_TILE_SIZE = 512
 VARIABLES = []; VAR_NAMES = []; VAR_DESC = {}; VAR_UNITS = {}; VAR_INDEX = {}
 VAR_NLEV = {}; VAR_NDIM = {}; VAR_LEVELS = {}; VAR_PLOT_LEVELS = {}; NVARS_FIELDS = 0
 FIXED_RUN = False  # True quando o config representa campos fixos (sem timestamp de validade)
+NEEDS_LON_ROLL = False   # True quando grade global 0-360 -> roll para -180/+180
+LON_ROLL_IDX   = 0       # numero de colunas a rolar (negativo = esquerda)
 PRECIP_VARS = []; PRECIP_SET = set(); CMAP_CONFIG = {}
 _CONFIG_FILE = None; _VARS_FILE = None
 
@@ -230,6 +232,15 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
 
     FIXED_RUN = bool(m.get("fixed", False))
     YREV      = bool(m.get("yrev",  False))
+
+    # Detecta grade global 0-360 e calcula roll para convencao -180/+180 nos COGs
+    _global_360 = (LON0 >= 0.0 and DLON > 0 and abs(NX * DLON - 360.0) < DLON)
+    if _global_360:
+        NEEDS_LON_ROLL = True
+        LON_ROLL_IDX   = -int(round(180.0 / DLON))  # colunas a rolar p/ -180
+    else:
+        NEEDS_LON_ROLL = False
+        LON_ROLL_IDX   = 0
 
     # ── Caminhos ───────────────────────────────────────────────────────
     p    = cfg["paths"]

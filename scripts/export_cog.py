@@ -74,10 +74,14 @@ def _get_transform():
     """
     Retorna o Affine transform rasterio para a grade atual.
     - Grade regular : usa LON0/LAT0/DLON/DLAT diretamente.
-    - Grade irregular (gaussiana): usa lat min/max + espaçamento médio.
+    - Grade irregular (gaussiana): usa lat min/max + espacamento medio.
+    - Grade global 0-360: ajusta ul_lon para -180 (apos roll do array).
     Sempre recalculado para refletir a grade carregada em config.
     """
-    ul_lon  = config.LON0
+    if getattr(config, "NEEDS_LON_ROLL", False):
+        ul_lon = -180.0
+    else:
+        ul_lon  = config.LON0
     if getattr(config, "IRREGULAR_LAT", False) and len(config.LATS) > 1:
         # Grade irregular: UL = lat máxima; espaçamento médio
         ul_lat  = float(config.LATS[-1])
@@ -134,6 +138,10 @@ def _prepare_array(data: np.ndarray, var_name: str) -> np.ndarray:
         arr = _regrid_to_regular(arr)   # gaussiana -> regular (S->N)
 
     arr = np.flipud(arr)            # S->N para N->S
+
+    # Grade global 0-360: rolar colunas para convencao -180/+180
+    if getattr(config, "NEEDS_LON_ROLL", False) and getattr(config, "LON_ROLL_IDX", 0) != 0:
+        arr = np.roll(arr, config.LON_ROLL_IDX, axis=1)
 
     arr = np.where(np.isnan(arr), np.float32(NODATA), arr)
     return arr
