@@ -10,6 +10,22 @@ from datetime import datetime
 import config
 
 
+def _mask_undef(arr: np.ndarray) -> None:
+    """Substitui valores UNDEF por NaN in-place.
+
+    Usa tolerancia relativa ao magnitude do UNDEF (float32) para cobrir tanto
+    o UNDEF padrao (9.99e20) quanto UNDEFs de grande magnitude negativa
+    como -2.56E+33 (GPOSETA/BESM), onde a ULP do float32 e ~3e26 e a
+    tolerancia fixa de 1e14 nunca identificaria o valor.
+    """
+    undef32 = float(np.float32(config.UNDEF))
+    # Tolerancia = max(1e14, 0.01% do |UNDEF|) — robusto para qualquer magnitude
+    tol = max(1e14, abs(undef32) * 1e-4)
+    with np.errstate(invalid="ignore"):
+        arr[np.abs(arr - undef32) < tol] = np.nan
+
+
+
 # Formatos de timestamp tentados na ordem (do mais completo ao mais curto).
 # Alguns modelos omitem o mes no nome do arquivo (ex: %Y%d%H = YYYYDDHH).
 _TIMESTAMP_FORMATS = [
@@ -125,9 +141,8 @@ def read_field(
     if getattr(config, "YREV", False):
         arr = arr[::-1, :]
 
-    # Substitui undef por NaN (suprime warning de inf/nan na subtracao)
-    with np.errstate(invalid="ignore"):
-        arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
+    # Substitui undef por NaN (tolerancia adaptativa para UNDEF de grande magnitude)
+    _mask_undef(arr)
 
     return arr
 
@@ -196,16 +211,14 @@ def read_all_fields(
             for k in range(nlev):
                 arr = all_raw[idx + k].copy()
                 if _yrev: arr = arr[::-1, :]
-                with np.errstate(invalid="ignore"):
-                    arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
+                _mask_undef(arr)
                 arrs.append(arr)
             result[name] = np.stack(arrs, axis=0)
         else:
             # 2D: campo unico -> (NY, NX)
             arr = all_raw[idx].copy()
             if _yrev: arr = arr[::-1, :]
-            with np.errstate(invalid="ignore"):
-                arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
+            _mask_undef(arr)
             result[name] = arr
 
     return result
@@ -263,8 +276,7 @@ def read_fields_selective(
     def _clean(arr):
         arr = arr.astype(np.float32).reshape(ny, nx).copy()
         if _yrev: arr = arr[::-1, :]
-        with np.errstate(invalid="ignore"):
-            arr[np.abs(arr - config.UNDEF) < 1e14] = np.nan
+        _mask_undef(arr)
         return arr
 
     result = {}
