@@ -105,6 +105,7 @@ LOG_DIR = "logs"
 DPI = 120; FIG_EXT = "png"
 COG_COMPRESS = "DEFLATE"; COG_ZLEVEL = 1; COG_PREDICTOR = 2; COG_TILE_SIZE = 512
 COG_FILL_UNDEF = False  # True: preenche undef com vizinho valido mais proximo (sem nodata)
+COG_LON180 = False      # True: converte grade global 0-360 para -180..180 no COG
 VARIABLES = []; VAR_NAMES = []; VAR_DESC = {}; VAR_UNITS = {}; VAR_INDEX = {}
 VAR_NLEV = {}; VAR_NDIM = {}; VAR_LEVELS = {}; VAR_PLOT_LEVELS = {}; NVARS_FIELDS = 0
 FIXED_RUN = False  # True quando o config representa campos fixos (sem timestamp de validade)
@@ -151,7 +152,7 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     global SISMOM_DATA_BASE, DATA_DIR, DATA_DIR_TEMPLATE
     global OUTPUT_DIR, LOG_DIR
     global DPI, FIG_EXT
-    global COG_COMPRESS, COG_ZLEVEL, COG_PREDICTOR, COG_TILE_SIZE, COG_FILL_UNDEF
+    global COG_COMPRESS, COG_ZLEVEL, COG_PREDICTOR, COG_TILE_SIZE, COG_FILL_UNDEF, COG_LON180
     global VARIABLES, VAR_NAMES, VAR_DESC, VAR_UNITS, VAR_INDEX
     global VAR_NLEV, VAR_NDIM, VAR_LEVELS, VAR_PLOT_LEVELS, NVARS_FIELDS
     global PRECIP_VARS, PRECIP_SET
@@ -254,6 +255,7 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     COG_PREDICTOR  = int(cog.get("predictor", 2))
     COG_TILE_SIZE  = int(cog.get("tile_size", 512))
     COG_FILL_UNDEF = bool(cog.get("fill_undef", False))
+    COG_LON180     = bool(cog.get("lon_180",    False))
 
     # ── Variaveis ─────────────────────────────────────────────────────────────
     VARIABLES  = vars_raw

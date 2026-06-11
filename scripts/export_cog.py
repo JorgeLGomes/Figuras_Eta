@@ -70,6 +70,26 @@ def _cog_params():
 # CRS: WGS84 geografico
 CRS_WGS84 = CRS.from_epsg(4326)
 
+def _lon_roll_k() -> int:
+    """Numero de colunas a rolar para converter grade global 0-360 em -180..180.
+
+    Retorna 0 quando cog.lon_180 esta desligado, a grade nao e global em lon,
+    ou ja esta na convencao -180..180. k = indice do primeiro centro >= 180.
+    """
+    if not getattr(config, "COG_LON180", False):
+        return 0
+    if getattr(config, "IRREGULAR_LON", False):
+        return 0
+    span = config.NX * config.DLON
+    if abs(span - 360.0) > config.DLON:
+        return 0                                # nao e grade global em lon
+    last_center = config.LON0 + (config.NX - 1) * config.DLON
+    if last_center <= 180.0 + 1e-6:
+        return 0                                # ja em -180..180
+    lons = config.LON0 + np.arange(config.NX) * config.DLON
+    return int(np.searchsorted(lons, 180.0, side="left")) % config.NX
+
+
 def _get_transform():
     """
     Retorna o Affine transform rasterio para a grade atual.
@@ -81,7 +101,12 @@ def _get_transform():
     Elimina o offset sistematico de ~DLON/2 visivel em grades esparsas (ex BESM).
     """
     # Canto oeste: LON0 e centro da celula 0, canto = LON0 - DLON/2
-    ul_lon = config.LON0 - config.DLON / 2.0
+    # cog.lon_180: apos o roll, a 1a coluna e o primeiro centro >= 180 (-360)
+    k = _lon_roll_k()
+    if k:
+        ul_lon = (config.LON0 + k * config.DLON) - 360.0 - config.DLON / 2.0
+    else:
+        ul_lon = config.LON0 - config.DLON / 2.0
     if getattr(config, "IRREGULAR_LAT", False) and len(config.LATS) > 1:
         # Grade irregular: canto norte = ultimo ponto + metade do espacamento topo
         top_spacing = float(config.LATS[-1] - config.LATS[-2])
@@ -172,6 +197,12 @@ def _prepare_array(data: np.ndarray, var_name: str) -> np.ndarray:
         arr = _fill_undef_nearest(arr)
 
     arr = np.flipud(arr)            # S->N para N->S
+
+    # cog.lon_180: rola colunas para a convencao -180..180 (coerente com
+    # o ul_lon ajustado em _get_transform)
+    k = _lon_roll_k()
+    if k:
+        arr = np.roll(arr, -k, axis=1)
 
     arr = np.where(np.isnan(arr), np.float32(NODATA), arr)
     return arr
