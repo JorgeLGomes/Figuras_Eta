@@ -431,6 +431,9 @@ def main():
             print(f"  PNG    : {os.path.abspath(run_output_dir)}")
         if generate_cog:
             print(f"  TIF    : {os.path.abspath(cog_run_dir)}")
+            print(f"  COG    : fill_undef={'on' if getattr(config,'COG_FILL_UNDEF',False) else 'off'}"
+                  f"  lon_180={'on' if getattr(config,'COG_LON180',False) else 'off'}"
+                  f"  predictor={getattr(config,'COG_PREDICTOR',2)}")
         print(f"  Log    : {log_file}")
         print("=" * 60)
 
