@@ -368,6 +368,40 @@ PLOT_FUNCTIONS = {
 }
 
 
+def _plot_generic(var_name, data, timestamp, output_dir, **kwargs):
+    """Fallback generico para variaveis sem funcao de plot dedicada.
+
+    Usa descricao/unidades/cmap/vmin/vmax de variables.yaml (via config).
+      - 2D (NY, NX)       : 1 figura
+      - 3D (nlev, NY, NX) : 1 figura por nivel de plot_levels
+                            (ou todos os niveis, se plot_levels vazio)
+    """
+    import config
+    if data.ndim == 2:
+        return pu.plot_field(data, var_name, timestamp, output_dir, **kwargs)
+
+    # 3D: plota os niveis solicitados
+    all_lvls  = config.VAR_LEVELS.get(var_name, [])
+    plot_lvls = config.VAR_PLOT_LEVELS.get(var_name, []) or all_lvls
+    fpath = None
+    for lev in plot_lvls:
+        if lev not in all_lvls:
+            continue
+        k = all_lvls.index(lev)
+        if k >= data.shape[0]:
+            continue
+        fpath = pu.plot_field(
+            data[k], var_name, timestamp, output_dir,
+            title_extra=f"{lev} hPa", **kwargs,
+        )
+    if fpath is None:
+        raise ValueError(
+            f"'{var_name}': nenhum nivel valido para plotar "
+            f"(levels={all_lvls}, plot_levels={plot_lvls}, shape={data.shape})"
+        )
+    return fpath
+
+
 def plot_variable(
     var_name: str,
     data: np.ndarray,
@@ -377,11 +411,13 @@ def plot_variable(
 ) -> str:
     """
     Dispatcher: chama a função de plot correta para a variável.
+    Variaveis sem funcao dedicada usam o plot generico (2D ou 3D por nivel),
+    com cmap/vmin/vmax/descricao vindos de variables.yaml.
 
     Exemplo:
         fpath = plot_variable("TP2M", arr, timestamp, "figuras/TP2M")
     """
     fn = PLOT_FUNCTIONS.get(var_name)
     if fn is None:
-        raise ValueError(f"Variável '{var_name}' não possui função de plot registrada.")
+        return _plot_generic(var_name, data, timestamp, output_dir, **kwargs)
     return fn(data, timestamp, output_dir, **kwargs)
