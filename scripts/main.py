@@ -312,7 +312,10 @@ def parse_args():
     )
     parser.add_argument(
         "--sequential", action="store_true",
-        help="Ativa leitura com marcadores Fortran (OPTIONS SEQUENTIAL)"
+        help=(
+            "Ativa leitura com marcadores Fortran (OPTIONS SEQUENTIAL). "
+            "Ativado automaticamente quando o config.yaml tem model.sequential: true"
+        )
     )
     parser.add_argument(
         "--only_accum", action="store_true",
@@ -382,6 +385,12 @@ def main():
     args    = parse_args()
     verbose = not args.quiet
 
+    # OPTIONS SEQUENTIAL do CTL (model.sequential no config.yaml): sem isto os
+    # marcadores Fortran de 4 bytes sao lidos como dados -> campo deslocado
+    # ~2 linhas, lixo nas bordas (denormais ~1e-41) e undef fora de posicao.
+    if getattr(config, "SEQUENTIAL", False):
+        args.sequential = True
+
     # ── Resolver caminho dos dados ────────────────────────────────────────────
     # Prioridade: --data_dir > --data_base > SISMOM_DATA_BASE env > local data/
     if args.data_dir:
@@ -411,6 +420,8 @@ def main():
         print(f"  T0     : {config.T0.strftime('%d/%m/%Y %HZ')}")
         print(f"  Passos : {config.NTIMES}  ({config.DT_HOURS}h)")
         print(f"  Dados  : {os.path.abspath(data_dir)}")
+        print(f"  Leitura: {'sequential (marcadores Fortran)' if args.sequential else 'stream/direto'}"
+              + ("  |  yrev" if getattr(config, "YREV", False) else ""))
         print(f"  CPUs   : {os.cpu_count()}  |  workers={args.workers}")
         if args.skip_existing:
             print(f"  Modo   : skip_existing (retomada)")

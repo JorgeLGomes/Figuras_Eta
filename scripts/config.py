@@ -107,6 +107,7 @@ COG_COMPRESS = "DEFLATE"; COG_ZLEVEL = 1; COG_PREDICTOR = 2; COG_TILE_SIZE = 512
 VARIABLES = []; VAR_NAMES = []; VAR_DESC = {}; VAR_UNITS = {}; VAR_INDEX = {}
 VAR_NLEV = {}; VAR_NDIM = {}; VAR_LEVELS = {}; VAR_PLOT_LEVELS = {}; NVARS_FIELDS = 0
 FIXED_RUN = False  # True quando o config representa campos fixos (sem timestamp de validade)
+SEQUENTIAL = False # OPTIONS SEQUENTIAL: marcadores Fortran de 4 bytes por registro
 PRECIP_VARS = []; PRECIP_SET = set(); CMAP_CONFIG = {}
 _CONFIG_FILE = None; _VARS_FILE = None
 
@@ -154,7 +155,7 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     global VAR_NLEV, VAR_NDIM, VAR_LEVELS, VAR_PLOT_LEVELS, NVARS_FIELDS
     global PRECIP_VARS, PRECIP_SET
     global CMAP_CONFIG
-    global FIXED_RUN
+    global FIXED_RUN, SEQUENTIAL
     global _CONFIG_FILE, _VARS_FILE
 
     # Resolucao dos caminhos
@@ -228,8 +229,9 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     #   {yyyy}{mm}{dd}{hh}  ->  2026060600  (padrao 2D, 10 chars)
     #   {yyyy}{dd}{hh}      ->  20260600    (3D sem mes, 8 chars)
 
-    FIXED_RUN = bool(m.get("fixed", False))
-    YREV      = bool(m.get("yrev",  False))
+    FIXED_RUN  = bool(m.get("fixed", False))
+    YREV       = bool(m.get("yrev",  False))
+    SEQUENTIAL = bool(m.get("sequential", False))
 
     # ── Caminhos ───────────────────────────────────────────────────────
     p    = cfg["paths"]

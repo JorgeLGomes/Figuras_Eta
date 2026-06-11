@@ -10,6 +10,12 @@ from datetime import datetime
 import config
 
 
+def _marker_dtype(dtype: str) -> str:
+    """Dtype do marcador de registro Fortran (4 bytes) com o mesmo endianness
+    dos dados: arquivos BYTESWAPPED ("<f4") tem marcadores little-endian."""
+    return "<u4" if str(dtype).startswith("<") else ">u4"
+
+
 def _mask_undef(arr: np.ndarray) -> None:
     """Substitui valores UNDEF por NaN in-place.
 
@@ -117,7 +123,7 @@ def read_field(
                 rec_len_bytes = f.read(4)
                 if not rec_len_bytes:
                     raise EOFError(f"Fim inesperado do arquivo em {fpath}")
-                rec_len = int(np.frombuffer(rec_len_bytes, dtype=">u4")[0])
+                rec_len = int(np.frombuffer(rec_len_bytes, dtype=_marker_dtype(dtype))[0])
                 data_bytes = f.read(rec_len)
                 f.read(4)  # trailer
                 if i == var_idx:
@@ -179,7 +185,7 @@ def read_all_fields(
         all_raw = []
         with open(fpath, "rb") as f:
             for _ in range(n_fields):
-                rec_len = int(np.frombuffer(f.read(4), dtype=">u4")[0])
+                rec_len = int(np.frombuffer(f.read(4), dtype=_marker_dtype(dtype))[0])
                 raw     = f.read(rec_len)
                 f.read(4)
                 all_raw.append(
@@ -297,7 +303,7 @@ def read_fields_selective(
         tmp = {}
         with open(fpath, "rb") as f:
             for fi in range(n_fields):
-                rec_len = int(np.frombuffer(f.read(4), dtype=">u4")[0])
+                rec_len = int(np.frombuffer(f.read(4), dtype=_marker_dtype(dtype))[0])
                 raw     = f.read(rec_len)
                 f.read(4)
                 if fi in needed:
