@@ -104,6 +104,7 @@ OUTPUT_DIR = "saida"
 LOG_DIR = "logs"
 DPI = 120; FIG_EXT = "png"
 COG_COMPRESS = "DEFLATE"; COG_ZLEVEL = 1; COG_PREDICTOR = 2; COG_TILE_SIZE = 512
+COG_FILL_UNDEF = False  # True: preenche undef com vizinho valido mais proximo (sem nodata)
 VARIABLES = []; VAR_NAMES = []; VAR_DESC = {}; VAR_UNITS = {}; VAR_INDEX = {}
 VAR_NLEV = {}; VAR_NDIM = {}; VAR_LEVELS = {}; VAR_PLOT_LEVELS = {}; NVARS_FIELDS = 0
 FIXED_RUN = False  # True quando o config representa campos fixos (sem timestamp de validade)
@@ -150,7 +151,7 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     global SISMOM_DATA_BASE, DATA_DIR, DATA_DIR_TEMPLATE
     global OUTPUT_DIR, LOG_DIR
     global DPI, FIG_EXT
-    global COG_COMPRESS, COG_ZLEVEL, COG_PREDICTOR, COG_TILE_SIZE
+    global COG_COMPRESS, COG_ZLEVEL, COG_PREDICTOR, COG_TILE_SIZE, COG_FILL_UNDEF
     global VARIABLES, VAR_NAMES, VAR_DESC, VAR_UNITS, VAR_INDEX
     global VAR_NLEV, VAR_NDIM, VAR_LEVELS, VAR_PLOT_LEVELS, NVARS_FIELDS
     global PRECIP_VARS, PRECIP_SET
@@ -250,8 +251,9 @@ def init_config(config_file=None, vars_file=None, run_tag=None):
     cog = cfg.get("cog", {})
     COG_COMPRESS  = str(cog.get("compress",  "DEFLATE"))
     COG_ZLEVEL    = int(cog.get("zlevel",    1))
-    COG_PREDICTOR = int(cog.get("predictor", 2))
-    COG_TILE_SIZE = int(cog.get("tile_size", 512))
+    COG_PREDICTOR  = int(cog.get("predictor", 2))
+    COG_TILE_SIZE  = int(cog.get("tile_size", 512))
+    COG_FILL_UNDEF = bool(cog.get("fill_undef", False))
 
     # ── Variaveis ─────────────────────────────────────────────────────────────
     VARIABLES  = vars_raw

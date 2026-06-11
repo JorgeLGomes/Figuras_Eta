@@ -121,10 +121,38 @@ def _regrid_to_regular(arr: np.ndarray) -> np.ndarray:
         return out
 
 
+def _fill_undef_nearest(arr: np.ndarray) -> np.ndarray:
+    """Preenche NaN com o valor valido mais proximo (para visualizacao continua).
+
+    Usa scipy.ndimage.distance_transform_edt quando disponivel; senao,
+    dilata iterativamente com a media dos vizinhos validos (grades pequenas).
+    """
+    mask = np.isnan(arr)
+    if not mask.any() or mask.all():
+        return arr
+    try:
+        from scipy.ndimage import distance_transform_edt
+        idx = distance_transform_edt(mask, return_distances=False, return_indices=True)
+        return arr[tuple(idx)]
+    except ImportError:
+        import warnings
+        out = arr.copy()
+        while np.isnan(out).any():
+            m = np.isnan(out)
+            p = np.pad(out, 1, constant_values=np.nan)
+            stack = np.stack([p[:-2, 1:-1], p[2:, 1:-1], p[1:-1, :-2], p[1:-1, 2:]])
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                nb = np.nanmean(stack, axis=0)
+            out[m] = nb[m]
+        return out
+
+
 def _prepare_array(data: np.ndarray, var_name: str) -> np.ndarray:
     """
     - Converte m->mm para precipitacao
     - Reamostrage para grade regular quando grade Y é irregular (gaussiana)
+    - cog.fill_undef: preenche undef com vizinho mais proximo (sem mascara)
     - Flipa verticalmente (GrADS: S->N; rasterio: N->S)
     - Substitui NaN por NODATA
     - Retorna float32
@@ -137,6 +165,11 @@ def _prepare_array(data: np.ndarray, var_name: str) -> np.ndarray:
 
     if getattr(config, "IRREGULAR_LAT", False):
         arr = _regrid_to_regular(arr)   # gaussiana -> regular (S->N)
+
+    # Nao mascarar: preenche undef (ex: abaixo do solo em niveis de pressao)
+    # com o valor valido mais proximo -> campo continuo, sem pixels nodata
+    if getattr(config, "COG_FILL_UNDEF", False):
+        arr = _fill_undef_nearest(arr)
 
     arr = np.flipud(arr)            # S->N para N->S
 
